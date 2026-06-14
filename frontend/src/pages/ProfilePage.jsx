@@ -222,10 +222,13 @@ const ProfilePage = () => {
             const activeProfile = profiles.find(p => p.is_active);
             // Local state inside a wrapper block to load once active profile loads
             return (
-              <ProfileMetadataForm 
-                activeProfile={activeProfile} 
-                onUpdate={fetchData} 
-              />
+              <>
+                <ProfileMetadataForm 
+                  activeProfile={activeProfile} 
+                  onUpdate={fetchData} 
+                />
+                <KnowledgeGraphQuestions />
+              </>
             );
           })()}
 
@@ -452,6 +455,122 @@ const ProfileMetadataForm = ({ activeProfile, onUpdate }) => {
           {saving ? "Saving Auto-Fill details..." : "Update Auto-Fill settings"}
         </button>
       </form>
+    </div>
+  );
+};
+
+// Subcomponent to list and update custom RAG vector memory questions
+const KnowledgeGraphQuestions = () => {
+  const [questions, setQuestions] = useState([]);
+  const [answers, setAnswers] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  const fetchQuestions = async () => {
+    try {
+      const data = await profilesAPI.getKnowledgebase();
+      setQuestions(data);
+      // Initialize edit answers state
+      const initialAnswers = {};
+      data.forEach(q => {
+        initialAnswers[q.id] = q.answer;
+      });
+      setAnswers(initialAnswers);
+    } catch (err) {
+      console.error("Failed to load knowledgebase:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchQuestions();
+  }, []);
+
+  const handleSaveAnswer = async (id) => {
+    try {
+      await profilesAPI.updateKnowledgebaseEntry(id, answers[id] || "");
+      alert("Answer saved successfully!");
+      fetchQuestions();
+    } catch (err) {
+      alert("Failed to save answer");
+    }
+  };
+
+  if (loading) return null;
+
+  const unanswered = questions.filter(q => q.answer === "");
+  const answered = questions.filter(q => q.answer !== "");
+
+  return (
+    <div className="glass-card p-6 rounded-2xl border border-white/10 flex flex-col gap-6 mt-6">
+      <div>
+        <h3 className="text-base font-bold text-white flex items-center gap-1.5">
+          <Edit2 size={18} className="text-indigo-400" /> Custom Knowledge Base
+        </h3>
+        <p className="text-[10px] text-[#908fa0] mt-1">
+          Answer custom screening questions encountered during applications to update the AI's semantic memory.
+        </p>
+      </div>
+
+      {unanswered.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <h4 className="text-xs font-bold text-red-400 flex items-center gap-1.5">
+            <AlertCircle size={14} /> Unanswered Questions ({unanswered.length})
+          </h4>
+          <div className="flex flex-col gap-3">
+            {unanswered.map(q => (
+              <div key={q.id} className="p-4 rounded-xl bg-red-500/[0.02] border border-red-500/20 flex flex-col gap-2">
+                <span className="text-xs font-semibold text-white">{q.question}</span>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={answers[q.id] || ""}
+                    onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+                    placeholder="Provide your answer..."
+                    className="flex-1 bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                  />
+                  <button
+                    onClick={() => handleSaveAnswer(q.id)}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-colors"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-4">
+        <h4 className="text-xs font-bold text-[#908fa0]">Answered Questions ({answered.length})</h4>
+        <div className="flex flex-col gap-2 max-h-80 overflow-y-auto pr-1">
+          {answered.map(q => (
+            <div key={q.id} className="p-3 rounded-xl bg-white/5 border border-white/5 flex flex-col gap-2">
+              <span className="text-xs font-semibold text-white/90">{q.question}</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={answers[q.id] || ""}
+                  onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+                  className="flex-1 bg-black/20 border border-white/5 rounded-lg py-1.5 px-3 text-xs focus:outline-none focus:border-indigo-500 text-white/70"
+                />
+                <button
+                  onClick={() => handleSaveAnswer(q.id)}
+                  className="bg-white/10 hover:bg-white/20 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Update
+                </button>
+              </div>
+            </div>
+          ))}
+          {answered.length === 0 && (
+            <div className="text-center py-4 text-xs text-[#908fa0]">
+              No answered questions yet.
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

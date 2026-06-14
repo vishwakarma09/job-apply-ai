@@ -88,6 +88,18 @@ export const profilesAPI = {
   update: async (profileId, profileData) => {
     const response = await api.put(`/api/profiles/${profileId}`, profileData);
     return response.data;
+  },
+  getKnowledgebase: async () => {
+    const response = await api.get("/api/profiles/knowledgebase");
+    return response.data;
+  },
+  getUnansweredKnowledgebase: async () => {
+    const response = await api.get("/api/profiles/knowledgebase/unanswered");
+    return response.data;
+  },
+  updateKnowledgebaseEntry: async (kbId, answer) => {
+    const response = await api.put(`/api/profiles/knowledgebase/${kbId}`, { answer });
+    return response.data;
   }
 };
 

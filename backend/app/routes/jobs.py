@@ -181,20 +181,39 @@ def solve_screen_endpoint(
                 FROM user_knowledgebase
                 WHERE user_id = :user_id
                 ORDER BY question_embedding <=> :qv
-                LIMIT 2
+                LIMIT 1
             """)
             
+            has_match = False
             try:
-                results = db.execute(stmt, {"qv": qv_str, "user_id": current_user.id}).fetchall()
-                for row in results:
-                    if row.similarity > 0.60:
-                        rag_context.append({
-                            "question": row.question,
-                            "answer": row.answer,
-                            "similarity": float(row.similarity)
-                        })
+                row = db.execute(stmt, {"qv": qv_str, "user_id": current_user.id}).fetchone()
+                if row:
+                    if row.similarity >= 0.60:
+                        has_match = True
+                        if row.answer.strip() != "":
+                            rag_context.append({
+                                "question": row.question,
+                                "answer": row.answer,
+                                "similarity": float(row.similarity)
+                            })
             except Exception as query_err:
                 print(f"Error querying user_knowledgebase for RAG: {query_err}")
+                
+            if not has_match:
+                # Check if this exact question exists
+                existing_entry = db.query(models.UserKnowledgebase).filter(
+                    models.UserKnowledgebase.user_id == current_user.id,
+                    models.UserKnowledgebase.question == label_clean
+                ).first()
+                if not existing_entry:
+                    new_kb = models.UserKnowledgebase(
+                        user_id=current_user.id,
+                        question=label_clean,
+                        answer="", # unanswered
+                        question_embedding=embedding
+                    )
+                    db.add(new_kb)
+                    db.commit()
 
         # 2. Call AI Solver passing the RAG context
         from ..services import cerebras_service

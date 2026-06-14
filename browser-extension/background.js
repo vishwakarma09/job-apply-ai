@@ -14,6 +14,19 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Message listener to proxy backend requests and bypass content-script CORS
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "openTab") {
+    const { url } = request;
+    if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+      chrome.tabs.create({ url }, (tab) => {
+        sendResponse({ success: true, tabId: tab.id });
+      });
+      return true;
+    } else {
+      sendResponse({ success: false, error: "Invalid URL: " + url });
+      return;
+    }
+  }
+
   if (request.action === "fetchBackend") {
     const { url, options } = request;
 

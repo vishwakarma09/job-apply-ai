@@ -187,7 +187,7 @@ def learn_profile_answers(
         
     # Update existing with new answers (case-insensitive keys for normalization)
     for q, a in new_answers.items():
-        if q and a is not None:
+        if q and a is not None and str(a).strip() != "":
             existing[q.lower().strip()] = str(a).strip()
             
     profile.answers_json = json.dumps(existing)
@@ -199,6 +199,8 @@ def learn_profile_answers(
         if q and a is not None:
             q_clean = q.strip()
             a_clean = str(a).strip()
+            if a_clean == "":
+                continue  # Never learn/overwrite with empty answer
             
             # Check if it already exists
             kb_entry = db.query(models.UserKnowledgebase).filter(
@@ -250,3 +252,48 @@ def update_job_profile(
     db.refresh(db_profile)
     sync_profile_to_knowledgebase(db, db_profile)
     return db_profile
+
+@router.get("/knowledgebase", response_model=List[schemas.UserKnowledgebaseResponse])
+def get_all_knowledgebase_entries(
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    return db.query(models.UserKnowledgebase).filter(
+        models.UserKnowledgebase.user_id == current_user.id
+    ).order_by(models.UserKnowledgebase.created_at.desc()).all()
+
+@router.get("/knowledgebase/unanswered", response_model=List[schemas.UserKnowledgebaseResponse])
+def get_unanswered_questions(
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    return db.query(models.UserKnowledgebase).filter(
+        models.UserKnowledgebase.user_id == current_user.id,
+        models.UserKnowledgebase.answer == ""
+    ).all()
+
+@router.put("/knowledgebase/{kb_id}", response_model=schemas.UserKnowledgebaseResponse)
+def update_knowledgebase_entry(
+    kb_id: int,
+    payload: dict,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    kb_entry = db.query(models.UserKnowledgebase).filter(
+        models.UserKnowledgebase.id == kb_id,
+        models.UserKnowledgebase.user_id == current_user.id
+    ).first()
+    if not kb_entry:
+        raise HTTPException(status_code=404, detail="Knowledgebase entry not found")
+    
+    answer = payload.get("answer", "")
+    kb_entry.answer = answer.strip()
+    
+    # Update embedding
+    from ..services.embedding_service import get_embedding
+    kb_entry.question_embedding = get_embedding(kb_entry.question)
+    
+    db.commit()
+    db.refresh(kb_entry)
+    return kb_entry
+

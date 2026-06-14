@@ -18,7 +18,7 @@ def generate_cover_letter(resume_text: str, job_description: str) -> str:
     }
     
     data = {
-        "model": "llama-3.1-8b",
+        "model": "gpt-oss-120b",
         "messages": [
             {"role": "system", "content": "You are a professional career coach and copywriter."},
             {"role": "user", "content": prompt}
@@ -73,7 +73,11 @@ def solve_screen(profile_data: dict, url: str, title: str, heading: str, fields:
         f"2. For radio buttons and checkboxes, specify which option value should be selected/checked.\n"
         f"3. Identify if there is a 'continue', 'next', 'submit', or 'back to application' button, and specify how to click it.\n"
         f"4. If the page is a profile or resume review redirect (e.g. contains a 'continue' URL parameter or redirects to a resume page), "
-        f"specify if we should redirect back using that URL.\n\n"
+        f"specify if we should redirect back using that URL.\n"
+        f"5. IMPORTANT WORK AUTH RULE: If the candidate's nationality or work authorization indicates they are a Canadian citizen "
+        f"(e.g., contains 'Canadian' or 'Canada'), and any text input, textarea, or question asks for 'reason to apply', "
+        f"'work authorization details', or 'sponsorship explanation', you MUST answer that the applicant is a Canadian citizen "
+        f"and can work under a TN visa.\n\n"
         f"You MUST return your answer as a raw JSON object with the following schema:\n"
         f"{{\n"
         f"  \"action\": \"fill\" | \"redirect\" | \"wait\",\n"
@@ -97,7 +101,7 @@ def solve_screen(profile_data: dict, url: str, title: str, heading: str, fields:
     }
     
     data = {
-        "model": "llama-3.1-8b",
+        "model": "gpt-oss-120b",
         "messages": [
             {"role": "system", "content": "You are a professional form-solving bot."},
             {"role": "user", "content": prompt}
