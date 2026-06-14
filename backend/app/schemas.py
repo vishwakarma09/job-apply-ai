@@ -68,6 +68,7 @@ class JobProfileBase(BaseModel):
     languages: Optional[str] = None
     skills: Optional[str] = None
     work_authorization: Optional[str] = None
+    answers_json: Optional[str] = "{}"
 
 class JobProfileCreate(JobProfileBase):
     pass
@@ -88,6 +89,7 @@ class JobProfileUpdate(BaseModel):
     languages: Optional[str] = None
     skills: Optional[str] = None
     work_authorization: Optional[str] = None
+    answers_json: Optional[str] = None
 
 class JobProfileResponse(JobProfileBase):
     id: int
@@ -242,4 +244,20 @@ class ExtensionLogCreate(BaseModel):
     timestamp: Optional[str] = None
     job_id: Optional[str] = None
     platform: Optional[str] = None
+
+# --- UserKnowledgebase Schemas ---
+class UserKnowledgebaseBase(BaseModel):
+    question: str
+    answer: str
+
+class UserKnowledgebaseCreate(UserKnowledgebaseBase):
+    pass
+
+class UserKnowledgebaseResponse(UserKnowledgebaseBase):
+    id: int
+    user_id: int
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
 

@@ -37,8 +37,8 @@ env/
 
 # Database / Local storage
 postgres_data/
-uploads/resumes/*
-!uploads/resumes/mock_john_doe_resume.pdf
+backend/uploads/resumes/*
+!backend/uploads/resumes/mock_john_doe_resume.pdf
 
 # Environment variables
 .env

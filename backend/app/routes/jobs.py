@@ -140,6 +140,122 @@ def create_extension_log(
         f"[{log_in.level}] - Job ID: {log_in.job_id or 'N/A'} - Platform: {log_in.platform or 'N/A'} - "
         f"Msg: {log_in.message}",
         flush=True
-    )
+)
     return {"status": "ok"}
+
+@router.post("/solve-screen")
+def solve_screen_endpoint(
+    payload: dict,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    profile_data = payload.get("profile", {})
+    url = payload.get("url", "")
+    title = payload.get("title", "")
+    heading = payload.get("heading", "")
+    fields = payload.get("fields", [])
+    
+    try:
+        from ..services.embedding_service import get_embedding
+        from sqlalchemy import text
+        
+        # 1. Fetch semantic RAG context from postgres pgvector
+        rag_context = []
+        seen_questions = set()
+        for f in fields:
+            label = f.get("label")
+            if not label:
+                continue
+            
+            label_clean = label.strip()
+            if label_clean in seen_questions:
+                continue
+            seen_questions.add(label_clean)
+            
+            # Vectorize label
+            embedding = get_embedding(label_clean)
+            qv_str = "[" + ",".join(map(str, embedding)) + "]"
+            
+            stmt = text("""
+                SELECT question, answer, 1 - (question_embedding <=> :qv) AS similarity
+                FROM user_knowledgebase
+                WHERE user_id = :user_id
+                ORDER BY question_embedding <=> :qv
+                LIMIT 2
+            """)
+            
+            try:
+                results = db.execute(stmt, {"qv": qv_str, "user_id": current_user.id}).fetchall()
+                for row in results:
+                    if row.similarity > 0.60:
+                        rag_context.append({
+                            "question": row.question,
+                            "answer": row.answer,
+                            "similarity": float(row.similarity)
+                        })
+            except Exception as query_err:
+                print(f"Error querying user_knowledgebase for RAG: {query_err}")
+
+        # 2. Call AI Solver passing the RAG context
+        from ..services import cerebras_service
+        result = cerebras_service.solve_screen(profile_data, url, title, heading, fields, rag_context)
+        
+        # 3. Auto-learn/cache LLM solver results
+        if result and result.get("action") == "fill" and result.get("fields"):
+            # Get active profile
+            profile = db.query(models.JobProfile).filter(
+                models.JobProfile.user_id == current_user.id,
+                models.JobProfile.is_active == True
+            ).first()
+            if not profile:
+                profile = db.query(models.JobProfile).filter(
+                    models.JobProfile.user_id == current_user.id
+                ).first()
+                
+            if profile:
+                import json
+                try:
+                    existing = json.loads(profile.answers_json) if profile.answers_json else {}
+                except Exception:
+                    existing = {}
+                
+                for f in result["fields"]:
+                    label = None
+                    for pf in fields:
+                        if (pf.get("id") == f.get("id") or pf.get("name") == f.get("name")) and pf.get("label"):
+                            label = pf["label"]
+                            break
+                    if label:
+                        q_clean = label.strip()
+                        a_clean = str(f.get("value")).strip()
+                        
+                        existing[q_clean.lower()] = a_clean
+                        
+                        # Save to user_knowledgebase table with embedding
+                        kb_entry = db.query(models.UserKnowledgebase).filter(
+                            models.UserKnowledgebase.user_id == current_user.id,
+                            models.UserKnowledgebase.question == q_clean
+                        ).first()
+                        
+                        embedding = get_embedding(q_clean)
+                        if kb_entry:
+                            kb_entry.answer = a_clean
+                            kb_entry.question_embedding = embedding
+                        else:
+                            kb_entry = models.UserKnowledgebase(
+                                user_id=current_user.id,
+                                question=q_clean,
+                                answer=a_clean,
+                                question_embedding=embedding
+                            )
+                            db.add(kb_entry)
+                
+                profile.answers_json = json.dumps(existing)
+                db.commit()
+                
+        return result
+    except Exception as e:
+        print(f"Error solving screen via LLM: {e}")
+        return {"action": "wait", "fields": [], "click_button": None}
+
 

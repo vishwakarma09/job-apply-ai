@@ -1,4 +1,5 @@
 import httpx
+import json
 from ..config import settings
 
 def generate_cover_letter(resume_text: str, job_description: str) -> str:
@@ -17,7 +18,7 @@ def generate_cover_letter(resume_text: str, job_description: str) -> str:
     }
     
     data = {
-        "model": "llama3.1-8b",
+        "model": "llama-3.1-8b",
         "messages": [
             {"role": "system", "content": "You are a professional career coach and copywriter."},
             {"role": "user", "content": prompt}
@@ -49,3 +50,84 @@ def generate_cover_letter(resume_text: str, job_description: str) -> str:
             f"I look forward to discussing this opportunity further.\n\n"
             f"Sincerely,\nApplicant"
         )
+
+def solve_screen(profile_data: dict, url: str, title: str, heading: str, fields: list, rag_context: list = None) -> dict:
+    rag_context_str = ""
+    if rag_context:
+        rag_context_str = "\n\nPreviously Resolved Questions (RAG Context):\n"
+        for idx, entry in enumerate(rag_context, 1):
+            rag_context_str += f"{idx}. Question: \"{entry['question']}\" -> Answer: \"{entry['answer']}\" (Confidence: {entry['similarity']:.2f})\n"
+        rag_context_str += "\nUse the answers from the 'Previously Resolved Questions' above to guide your choices for similar questions. Highly prioritize matching these answers."
+
+    prompt = (
+        f"You are an AI-powered job application form solver. Your task is to analyze the current webpage screen "
+        f"and decide what action to take based on the candidate's profile.{rag_context_str}\n\n"
+        f"Candidate Profile:\n{profile_data}\n\n"
+        f"Current Page Details:\n"
+        f"- URL: {url}\n"
+        f"- Page Title: {title}\n"
+        f"- Section Heading: {heading}\n"
+        f"- Detectable Form Fields: {fields}\n\n"
+        f"Instructions:\n"
+        f"1. For each input/textarea/select field in 'Detectable Form Fields', decide what value to enter from the candidate profile.\n"
+        f"2. For radio buttons and checkboxes, specify which option value should be selected/checked.\n"
+        f"3. Identify if there is a 'continue', 'next', 'submit', or 'back to application' button, and specify how to click it.\n"
+        f"4. If the page is a profile or resume review redirect (e.g. contains a 'continue' URL parameter or redirects to a resume page), "
+        f"specify if we should redirect back using that URL.\n\n"
+        f"You MUST return your answer as a raw JSON object with the following schema:\n"
+        f"{{\n"
+        f"  \"action\": \"fill\" | \"redirect\" | \"wait\",\n"
+        f"  \"redirect_url\": \"string or null (if action is redirect)\",\n"
+        f"  \"fields\": [\n"
+        f"    {{\n"
+        f"      \"id\": \"field_id\",\n"
+        f"      \"name\": \"field_name\",\n"
+        f"      \"type\": \"input_type\",\n"
+        f"      \"value\": \"value_to_fill_or_select\"\n"
+        f"    }}\n"
+        f"  ],\n"
+        f"  \"click_button\": \"button_text_or_selector_to_click_or_null\"\n"
+        f"}}\n"
+        f"Do not include any thinking, explanations or markdown block formatting. Return raw JSON."
+    )
+    
+    headers = {
+        "Authorization": f"Bearer {settings.CEREBRAS_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "model": "llama-3.1-8b",
+        "messages": [
+            {"role": "system", "content": "You are a professional form-solving bot."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.2
+    }
+    
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(
+                "https://api.cerebras.ai/v1/chat/completions",
+                headers=headers,
+                json=data
+            )
+            if response.status_code == 200:
+                result = response.json()
+                content = result["choices"][0]["message"]["content"].strip()
+                
+                # Strip markdown quotes if LLM returned them
+                if content.startswith("```"):
+                    parts = content.split("```")
+                    if len(parts) > 1:
+                        content = parts[1]
+                        if content.startswith("json"):
+                            content = content[4:]
+                content = content.strip("` \n")
+                
+                return json.loads(content)
+            else:
+                raise ValueError(f"Cerebras API returned status {response.status_code}: {response.text}")
+    except Exception as e:
+        print(f"Cerebras solve_screen failed: {str(e)}. Using fallback empty action.")
+        return {"action": "wait", "fields": [], "click_button": None}

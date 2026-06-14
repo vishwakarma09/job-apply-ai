@@ -12,6 +12,53 @@ router = APIRouter(prefix="/api/profiles", tags=["Profiles & Resumes"])
 UPLOAD_DIR = "uploads/resumes"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+def sync_profile_to_knowledgebase(db: Session, profile: models.JobProfile):
+    from ..services.embedding_service import get_embedding
+    
+    fields_mapping = {
+        "Phone number": profile.phone,
+        "Email address": profile.email,
+        "Nationality / Citizenship": profile.nationality,
+        "Do you require visa sponsorship?": profile.visa_sponsorship,
+        "Disability status": profile.disability_status,
+        "Veteran status": profile.veteran_status,
+        "Race / Ethnicity": profile.ethnicity,
+        "Gender": profile.gender,
+        "Languages spoken": profile.languages,
+        "Technical skills": profile.skills,
+        "Work authorization status": profile.work_authorization,
+        "Job Title": profile.title
+    }
+    
+    for question, answer in fields_mapping.items():
+        if not answer:
+            continue
+            
+        q_clean = question.strip()
+        a_clean = str(answer).strip()
+        
+        # Check if it already exists in user_knowledgebase for this user
+        kb_entry = db.query(models.UserKnowledgebase).filter(
+            models.UserKnowledgebase.user_id == profile.user_id,
+            models.UserKnowledgebase.question == q_clean
+        ).first()
+        
+        embedding = get_embedding(q_clean)
+        
+        if kb_entry:
+            kb_entry.answer = a_clean
+            kb_entry.question_embedding = embedding
+        else:
+            kb_entry = models.UserKnowledgebase(
+                user_id=profile.user_id,
+                question=q_clean,
+                answer=a_clean,
+                question_embedding=embedding
+            )
+            db.add(kb_entry)
+            
+    db.commit()
+
 @router.post("/upload-resume", response_model=schemas.ResumeResponse)
 def upload_resume(
     file: UploadFile = File(...),
@@ -79,6 +126,7 @@ def create_job_profile(
     db.add(db_profile)
     db.commit()
     db.refresh(db_profile)
+    sync_profile_to_knowledgebase(db, db_profile)
     return db_profile
 
 @router.get("", response_model=List[schemas.JobProfileResponse])
@@ -108,6 +156,72 @@ def get_active_profile(
         raise HTTPException(status_code=404, detail="No job profiles found")
     return profile
 
+@router.post("/active/learn")
+def learn_profile_answers(
+    payload: dict,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    import json
+    # Get active profile
+    profile = db.query(models.JobProfile).filter(
+        models.JobProfile.user_id == current_user.id,
+        models.JobProfile.is_active == True
+    ).first()
+    if not profile:
+        profile = db.query(models.JobProfile).filter(
+            models.JobProfile.user_id == current_user.id
+        ).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="No active profile found")
+    
+    new_answers = payload.get("answers", {})
+    if not new_answers:
+        return {"status": "ignored"}
+    
+    # Load existing answers
+    try:
+        existing = json.loads(profile.answers_json) if profile.answers_json else {}
+    except Exception:
+        existing = {}
+        
+    # Update existing with new answers (case-insensitive keys for normalization)
+    for q, a in new_answers.items():
+        if q and a is not None:
+            existing[q.lower().strip()] = str(a).strip()
+            
+    profile.answers_json = json.dumps(existing)
+    db.commit()
+
+    # Update user_knowledgebase table for semantic search RAG
+    from ..services.embedding_service import get_embedding
+    for q, a in new_answers.items():
+        if q and a is not None:
+            q_clean = q.strip()
+            a_clean = str(a).strip()
+            
+            # Check if it already exists
+            kb_entry = db.query(models.UserKnowledgebase).filter(
+                models.UserKnowledgebase.user_id == current_user.id,
+                models.UserKnowledgebase.question == q_clean
+            ).first()
+            
+            embedding = get_embedding(q_clean)
+            if kb_entry:
+                kb_entry.answer = a_clean
+                kb_entry.question_embedding = embedding
+            else:
+                kb_entry = models.UserKnowledgebase(
+                    user_id=current_user.id,
+                    question=q_clean,
+                    answer=a_clean,
+                    question_embedding=embedding
+                )
+                db.add(kb_entry)
+    db.commit()
+    
+    return {"status": "success", "total_learned": len(existing)}
+
 @router.put("/{profile_id}", response_model=schemas.JobProfileResponse)
 def update_job_profile(
     profile_id: int,
@@ -134,4 +248,5 @@ def update_job_profile(
         
     db.commit()
     db.refresh(db_profile)
+    sync_profile_to_knowledgebase(db, db_profile)
     return db_profile

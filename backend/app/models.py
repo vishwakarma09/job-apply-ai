@@ -58,6 +58,7 @@ class JobProfile(Base):
     languages = Column(String(255), nullable=True)
     skills = Column(Text, nullable=True)
     work_authorization = Column(String(100), nullable=True)
+    answers_json = Column(Text, nullable=True, default="{}")
 
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -182,3 +183,43 @@ class OrderItem(Base):
     # Relationships
     order = relationship("Order", back_populates="order_items")
     plan = relationship("Plan", back_populates="order_items")
+
+from sqlalchemy.types import UserDefinedType
+
+class Vector(UserDefinedType):
+    def __init__(self, dim=1536):
+        self.dim = dim
+
+    def get_col_spec(self, **kw):
+        return f"vector({self.dim})"
+
+    def bind_processor(self, dialect):
+        def process(value):
+            if value is None:
+                return None
+            if isinstance(value, str):
+                return value
+            return "[" + ",".join(map(str, value)) + "]"
+        return process
+
+    def result_processor(self, dialect, coltype):
+        def process(value):
+            if value is None:
+                return None
+            if isinstance(value, list):
+                return value
+            return [float(x) for x in value.strip("[]").split(",")]
+        return process
+
+class UserKnowledgebase(Base):
+    __tablename__ = "user_knowledgebase"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    question_embedding = Column(Vector(1536), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")
