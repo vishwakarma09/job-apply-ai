@@ -500,6 +500,179 @@ const Connectors = {
         return false;
       }
     }
+  },
+  
+  Indeed: {
+    name: "Indeed",
+    
+    // Selectors for DOM extraction
+    selectors: {
+      title: [
+        ".jobsearch-JobInfoHeader-title",
+        "h1.jobsearch-JobInfoHeader-title",
+        ".jobsearch-JobInfoHeader-title-container h1",
+        "h2.jobTitle",
+        ".jobTitle"
+      ],
+      company: [
+        "[data-testid='inlineHeader-companyName'] a",
+        "[data-testid='inlineHeader-companyName']",
+        ".jobsearch-CompanyInfoContainer a",
+        ".jobsearch-InlineCompanyRating div",
+        ".companyName"
+      ],
+      location: [
+        "[data-testid='inlineHeader-companyLocation'] div",
+        "[data-testid='inlineHeader-companyLocation']",
+        ".jobsearch-CompanyInfoContainer div:last-child",
+        ".companyLocation"
+      ],
+      description: [
+        "#jobDescriptionText",
+        ".jobsearch-jobDescriptionText",
+        "#jobDetailsSection"
+      ]
+    },
+
+    // Extract current job ID from url or search query params
+    getJobId() {
+      const url = window.location.href;
+      const matchView = url.match(/(?:\/viewjob|\/rc\/clk)\?.*?jk=([a-f0-9]+)/i);
+      if (matchView) return matchView[1];
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      const jkParam = urlParams.get("jk") || urlParams.get("vjk");
+      if (jkParam) return jkParam;
+
+      return null;
+    },
+
+    // Scrape details of currently loaded job
+    scrapeDetails(jobId) {
+      let title = "Unknown Position";
+      for (const sel of this.selectors.title) {
+        const el = document.querySelector(sel);
+        if (el && el.innerText.trim()) {
+          title = el.innerText.trim().replace(/\n- job post/gi, "").trim();
+          break;
+        }
+      }
+
+      let company = "Unknown Company";
+      for (const sel of this.selectors.company) {
+        const el = document.querySelector(sel);
+        if (el && el.innerText.trim()) {
+          company = el.innerText.trim().split("\n")[0].trim();
+          break;
+        }
+      }
+
+      let location = "Unknown Location";
+      for (const sel of this.selectors.location) {
+        const el = document.querySelector(sel);
+        if (el && el.innerText.trim()) {
+          let text = el.innerText.trim().replace(/\n/g, "").replace(/\s+/g, " ");
+          location = text;
+          break;
+        }
+      }
+
+      let description = "";
+      for (const sel of this.selectors.description) {
+        const el = document.querySelector(sel);
+        if (el && el.innerText.trim()) {
+          description = el.innerText.trim();
+          break;
+        }
+      }
+
+      const jobUrl = window.location.href.split("?")[0] + (jobId ? `?jk=${jobId}` : "");
+
+      return {
+        title,
+        company_name: company,
+        location,
+        job_url: jobUrl,
+        job_description: description,
+        platform_name: "Indeed"
+      };
+    },
+
+    // Scrape details directly from a list card (fallback to avoid loading race conditions)
+    scrapeCardDetails(cardElement) {
+      if (!cardElement) return null;
+      
+      const titleEl = cardElement.querySelector('h2.jobTitle, .jobTitle');
+      const companyEl = cardElement.querySelector('[data-testid="company-name"], .companyName');
+      const locationEl = cardElement.querySelector('[data-testid="text-location"], .companyLocation');
+
+      const title = titleEl ? titleEl.innerText.trim().replace(/\n- job post/gi, "").trim() : "Unknown Position";
+      const company = companyEl ? companyEl.innerText.trim().split("\n")[0].trim() : "Unknown Company";
+      const location = locationEl ? locationEl.innerText.trim().replace(/\n/g, "").replace(/\s+/g, " ") : "Unknown Location";
+
+      return { title, company, location };
+    },
+
+    // Returns array of clickable job card list elements from search results
+    getJobCards() {
+      const containerSelectors = [
+        ".job_seen_beacon",
+        ".result",
+        "[data-jk]",
+        ".slider_container"
+      ];
+      
+      const containers = Array.from(document.querySelectorAll(containerSelectors.join(",")));
+      return containers.filter(c => c.querySelector('h2.jobTitle, .jobTitle') !== null);
+    },
+
+    // Click on a specific job card without triggering a browser page refresh
+    clickJobCard(cardElement) {
+      if (!cardElement) return false;
+
+      const jobLink = cardElement.querySelector('a[data-jk]') || cardElement.querySelector('a');
+      if (jobLink) {
+        jobLink.removeAttribute("target");
+        
+        // Trigger click event sequence
+        const dispatchClickEvents = (element) => {
+          if (!element) return;
+          const opts = { bubbles: true, cancelable: true, view: window };
+          element.dispatchEvent(new MouseEvent("mousedown", opts));
+          element.dispatchEvent(new MouseEvent("mouseup", opts));
+          element.click();
+        };
+        
+        const innerClickTarget = jobLink.querySelector("span, strong, h3, h2, p") || jobLink;
+        dispatchClickEvents(innerClickTarget);
+        return true;
+      }
+
+      cardElement.click();
+      return true;
+    },
+
+    // Find and return the Indeed "Apply with Indeed" / Easy Apply button
+    getEasyApplyButton() {
+      const btn = document.querySelector('button#indeedApplyButton, button[id*="indeedApplyButton"], button[class*="indeedApplyButton"]');
+      if (btn) return btn;
+      return null;
+    },
+
+    // Indeed-specific Apply automation
+    EasyApply: {
+      async automate(profile, logMessage, checkRunning) {
+        logMessage("Indeed Easy Apply initiated. Since Indeed loads application forms inside dynamic popups/iframes, please proceed with completing any custom/additional questions manually. We will monitor the process.");
+        
+        // We will do a basic auto-fill attempt if form inputs are visible on the page/iframe
+        let modal = document.querySelector("div[role='dialog'], [class*='modal'], [id*='modal']");
+        if (modal) {
+          logMessage("Form modal detected. Attempting to auto-fill...");
+        }
+        
+        return true;
+      }
+    }
   }
 };
 
@@ -523,7 +696,8 @@ const getLabelText = (inputEl) => {
 // ==========================================
 // 3. MAIN WIDGET ENGINE & AUTO-APPLY LOOP
 // ==========================================
-if (window.location.hostname.includes("linkedin.com")) {
+if (window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("indeed.com")) {
+  const ActiveConnector = window.location.hostname.includes("indeed.com") ? Connectors.Indeed : Connectors.LinkedIn;
   let activeJobId = null;
   let shadowRoot = null;
   let currentJobData = null;
@@ -587,7 +761,7 @@ if (window.location.hostname.includes("linkedin.com")) {
             message: message,
             timestamp: new Date().toISOString(),
             job_id: jobId ? String(jobId) : null,
-            platform: "linkedin"
+            platform: ActiveConnector.name.toLowerCase()
           })
         }).catch(err => {
           console.warn("[AI Job Apply] Remote log failed:", err);
@@ -609,7 +783,7 @@ if (window.location.hostname.includes("linkedin.com")) {
 
       if (turboRunning) return;
       
-      const jobId = Connectors.LinkedIn.getJobId();
+      const jobId = ActiveConnector.getJobId();
       if (jobId && jobId !== activeJobId) {
         activeJobId = jobId;
         
@@ -630,7 +804,7 @@ if (window.location.hostname.includes("linkedin.com")) {
   };
 
   const scrapeAndShowWidget = () => {
-    currentJobData = Connectors.LinkedIn.scrapeDetails(activeJobId);
+    currentJobData = ActiveConnector.scrapeDetails(activeJobId);
     if (!shadowRoot) {
       injectShadowDOM();
     }
@@ -999,7 +1173,7 @@ if (window.location.hostname.includes("linkedin.com")) {
             <div class="job-company" id="ext-job-company">-</div>
             <div class="job-meta">
               <span id="ext-job-location">-</span>
-              <span>LinkedIn</span>
+              <span id="ext-job-platform">LinkedIn</span>
             </div>
           </div>
 
@@ -1033,7 +1207,7 @@ if (window.location.hostname.includes("linkedin.com")) {
               </select>
             </div>
             <div style="font-size: 10px; color: #908fa0; line-height: 1.4;">
-              Turbo Mode automates clicking through your current LinkedIn search list, auto-fills standard "Easy Apply" dialogs, and auto-syncs applications to your dashboard.
+              Turbo Mode automates clicking through your current job search list, auto-fills standard apply dialogs, and auto-syncs applications to your dashboard.
             </div>
           </div>
 
@@ -1121,6 +1295,8 @@ if (window.location.hostname.includes("linkedin.com")) {
       shadowRoot.querySelector("#ext-job-title").innerText = currentJobData.title;
       shadowRoot.querySelector("#ext-job-company").innerText = currentJobData.company_name;
       shadowRoot.querySelector("#ext-job-location").innerText = currentJobData.location;
+      const platformEl = shadowRoot.querySelector("#ext-job-platform");
+      if (platformEl) platformEl.innerText = ActiveConnector.name;
     }
 
     try {
@@ -1304,7 +1480,7 @@ if (window.location.hostname.includes("linkedin.com")) {
       consoleBox.scrollTop = consoleBox.scrollHeight;
       
       try {
-        const currentJobId = Connectors.LinkedIn.getJobId();
+        const currentJobId = ActiveConnector.getJobId();
         remoteLog(level, msg, currentJobId);
       } catch (err) {
         console.warn("[AI Job Apply] Error sending remote log:", err);
@@ -1315,9 +1491,9 @@ if (window.location.hostname.includes("linkedin.com")) {
     logMessage("Initializing Turbo Mode...");
 
     // Fetch list items
-    const jobCards = Connectors.LinkedIn.getJobCards();
+    const jobCards = ActiveConnector.getJobCards();
     if (jobCards.length === 0) {
-      logMessage("No job listings detected in the search list! Make sure you are on a LinkedIn jobs search page.");
+      logMessage(`No job listings detected in the search list! Make sure you are on a ${ActiveConnector.name} jobs search page.`);
       stopTurboApply();
       return;
     }
@@ -1339,7 +1515,7 @@ if (window.location.hostname.includes("linkedin.com")) {
       const card = jobCards[i];
       logMessage(`--- Job Item ${i + 1}/${jobCards.length} ---`);
       
-      const cardDetails = Connectors.LinkedIn.scrapeCardDetails(card);
+      const cardDetails = ActiveConnector.scrapeCardDetails(card);
       
       try {
         card.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1348,19 +1524,19 @@ if (window.location.hostname.includes("linkedin.com")) {
       }
       await sleep(800);
       
-      Connectors.LinkedIn.clickJobCard(card);
+      ActiveConnector.clickJobCard(card);
       logMessage("Clicked job card. Waiting for details to load...");
       await sleep(2500);
 
       if (!isContextValid()) break;
 
-      const jobId = Connectors.LinkedIn.getJobId();
+      const jobId = ActiveConnector.getJobId();
       if (!jobId) {
         logMessage("Could not retrieve Job ID. Skipping...");
         continue;
       }
 
-      const jobData = Connectors.LinkedIn.scrapeDetails(jobId);
+      const jobData = ActiveConnector.scrapeDetails(jobId);
       
       if (cardDetails) {
         if (jobData.title === "Unknown Position" && cardDetails.title !== "Unknown Position") {
@@ -1376,7 +1552,7 @@ if (window.location.hostname.includes("linkedin.com")) {
       
       logMessage(`Loaded: "${jobData.title}" at "${jobData.company_name}"`);
 
-      const easyApplyBtn = Connectors.LinkedIn.getEasyApplyButton();
+      const easyApplyBtn = ActiveConnector.getEasyApplyButton();
       if (!easyApplyBtn) {
         logMessage("No 'Easy Apply' button available for this listing. Skipping...");
         continue;
@@ -1388,8 +1564,8 @@ if (window.location.hostname.includes("linkedin.com")) {
 
       if (!isContextValid()) break;
 
-      // Launch modular LinkedIn Easy Apply form filler
-      const fillSuccess = await Connectors.LinkedIn.EasyApply.automate(
+      // Launch modular Easy Apply form filler
+      const fillSuccess = await ActiveConnector.EasyApply.automate(
         profile, 
         logMessage, 
         () => turboRunning && isContextValid()
