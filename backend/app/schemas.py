@@ -55,6 +55,19 @@ class JobProfileBase(BaseModel):
     title: str
     is_active: bool = False
     resume_id: Optional[int] = None
+    
+    # Knowledge Base Auto-fill fields
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    nationality: Optional[str] = None
+    visa_sponsorship: Optional[str] = None
+    disability_status: Optional[str] = None
+    veteran_status: Optional[str] = None
+    ethnicity: Optional[str] = None
+    gender: Optional[str] = None
+    languages: Optional[str] = None
+    skills: Optional[str] = None
+    work_authorization: Optional[str] = None
 
 class JobProfileCreate(JobProfileBase):
     pass
@@ -63,6 +76,18 @@ class JobProfileUpdate(BaseModel):
     title: Optional[str] = None
     is_active: Optional[bool] = None
     resume_id: Optional[int] = None
+    
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    nationality: Optional[str] = None
+    visa_sponsorship: Optional[str] = None
+    disability_status: Optional[str] = None
+    veteran_status: Optional[str] = None
+    ethnicity: Optional[str] = None
+    gender: Optional[str] = None
+    languages: Optional[str] = None
+    skills: Optional[str] = None
+    work_authorization: Optional[str] = None
 
 class JobProfileResponse(JobProfileBase):
     id: int
@@ -209,3 +234,12 @@ class OrderResponse(BaseModel):
 class CheckoutSessionCreate(BaseModel):
     plan_id: int
     promo_code: Optional[str] = None
+
+# --- Extension Log Schemas ---
+class ExtensionLogCreate(BaseModel):
+    level: str
+    message: str
+    timestamp: Optional[str] = None
+    job_id: Optional[str] = None
+    platform: Optional[str] = None
+

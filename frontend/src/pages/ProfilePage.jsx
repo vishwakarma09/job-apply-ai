@@ -217,6 +217,18 @@ const ProfilePage = () => {
             </div>
           </div>
 
+          {/* Profile Auto-Fill Knowledge Base */}
+          {profiles.find(p => p.is_active) && (() => {
+            const activeProfile = profiles.find(p => p.is_active);
+            // Local state inside a wrapper block to load once active profile loads
+            return (
+              <ProfileMetadataForm 
+                activeProfile={activeProfile} 
+                onUpdate={fetchData} 
+              />
+            );
+          })()}
+
           {/* extracted resume text preview */}
           {activeResumeText && (
             <div className="glass-card p-6 rounded-2xl border border-white/10 flex flex-col gap-4">
@@ -230,6 +242,216 @@ const ProfilePage = () => {
           )}
         </div>
       </div>
+    </div>
+  );
+};
+
+// Subcomponent to handle active profile auto-fill details editing
+const ProfileMetadataForm = ({ activeProfile, onUpdate }) => {
+  const [phone, setPhone] = useState(activeProfile.phone || "");
+  const [email, setEmail] = useState(activeProfile.email || "");
+  const [nationality, setNationality] = useState(activeProfile.nationality || "");
+  const [visa, setVisa] = useState(activeProfile.visa_sponsorship || "");
+  const [disability, setDisability] = useState(activeProfile.disability_status || "");
+  const [veteran, setVeteran] = useState(activeProfile.veteran_status || "");
+  const [ethnicity, setEthnicity] = useState(activeProfile.ethnicity || "");
+  const [gender, setGender] = useState(activeProfile.gender || "");
+  const [languages, setLanguages] = useState(activeProfile.languages || "");
+  const [skills, setSkills] = useState(activeProfile.skills || "");
+  const [workAuth, setWorkAuth] = useState(activeProfile.work_authorization || "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setPhone(activeProfile.phone || "");
+    setEmail(activeProfile.email || "");
+    setNationality(activeProfile.nationality || "");
+    setVisa(activeProfile.visa_sponsorship || "");
+    setDisability(activeProfile.disability_status || "");
+    setVeteran(activeProfile.veteran_status || "");
+    setEthnicity(activeProfile.ethnicity || "");
+    setGender(activeProfile.gender || "");
+    setLanguages(activeProfile.languages || "");
+    setSkills(activeProfile.skills || "");
+    setWorkAuth(activeProfile.work_authorization || "");
+  }, [activeProfile]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await profilesAPI.update(activeProfile.id, {
+        phone,
+        email,
+        nationality,
+        visa_sponsorship: visa,
+        disability_status: disability,
+        veteran_status: veteran,
+        ethnicity,
+        gender,
+        languages,
+        skills,
+        work_authorization: workAuth
+      });
+      alert("Auto-Fill metadata saved successfully!");
+      onUpdate();
+    } catch (err) {
+      alert("Failed to save auto-fill settings.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="glass-card p-6 rounded-2xl border border-white/10 flex flex-col gap-6">
+      <div>
+        <h3 className="text-base font-bold text-white flex items-center gap-1.5">
+          <Edit2 size={18} className="text-indigo-400" /> Auto-Fill Persona Settings
+        </h3>
+        <p className="text-[10px] text-[#908fa0] mt-1">Configure automated credentials for Easy Apply forms.</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Contact Email</label>
+          <input 
+            type="email" 
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="e.g. kkumar.sandeep89@gmail.com"
+            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Contact Phone</label>
+          <input 
+            type="text" 
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="e.g. (647) 395-0215"
+            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Nationality</label>
+          <input 
+            type="text" 
+            value={nationality}
+            onChange={(e) => setNationality(e.target.value)}
+            placeholder="e.g. Canadian"
+            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Work Auth Country</label>
+          <input 
+            type="text" 
+            value={workAuth}
+            onChange={(e) => setWorkAuth(e.target.value)}
+            placeholder="e.g. Canada, USA"
+            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Requires Visa Sponsorship</label>
+          <select 
+            value={visa}
+            onChange={(e) => setVisa(e.target.value)}
+            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+          >
+            <option value="">Select option</option>
+            <option value="No">No (Does not require sponsorship)</option>
+            <option value="Yes">Yes (Requires sponsorship)</option>
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Gender</label>
+          <select 
+            value={gender}
+            onChange={(e) => setGender(e.target.value)}
+            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+          >
+            <option value="">Select option</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Non-Binary">Non-Binary</option>
+            <option value="Decline">I choose not to self-identify</option>
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Disability Status</label>
+          <select 
+            value={disability}
+            onChange={(e) => setDisability(e.target.value)}
+            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+          >
+            <option value="">Select option</option>
+            <option value="No">No, I do not have a disability</option>
+            <option value="Yes">Yes, I have a disability</option>
+            <option value="Decline">I choose not to self-identify</option>
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Veteran Status</label>
+          <select 
+            value={veteran}
+            onChange={(e) => setVeteran(e.target.value)}
+            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+          >
+            <option value="">Select option</option>
+            <option value="No">No, am not a protected veteran</option>
+            <option value="Yes">Yes, am a protected veteran</option>
+            <option value="Decline">I choose not to self-identify</option>
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Ethnicity / Race</label>
+          <input 
+            type="text" 
+            value={ethnicity}
+            onChange={(e) => setEthnicity(e.target.value)}
+            placeholder="e.g. South Asian, Caucasian"
+            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Languages spoken</label>
+          <input 
+            type="text" 
+            value={languages}
+            onChange={(e) => setLanguages(e.target.value)}
+            placeholder="e.g. English, Hindi"
+            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5 md:col-span-2">
+          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Additional Skills / Technologies (for screening experience checks)</label>
+          <textarea 
+            value={skills}
+            onChange={(e) => setSkills(e.target.value)}
+            placeholder="e.g. Node: 5 years, React: 3 years, FastAPI: 2 years"
+            rows={3}
+            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white font-mono"
+          />
+        </div>
+
+        <button 
+          type="submit"
+          disabled={saving}
+          className="glow-btn py-2.5 rounded-xl font-bold text-xs md:col-span-2 mt-2"
+        >
+          {saving ? "Saving Auto-Fill details..." : "Update Auto-Fill settings"}
+        </button>
+      </form>
     </div>
   );
 };

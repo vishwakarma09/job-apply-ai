@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "AI Job Apply Assistant",
+  "version": "1.0.0",
+  "description": "Scrape LinkedIn job listings, generate cover letters using Cerebras LLM, and track your applications.",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://localhost:5173/*",
+    "https://*.linkedin.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:5173/*",
+        "https://*.linkedin.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AI Job Apply"
+  }
+}

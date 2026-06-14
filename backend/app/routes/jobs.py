@@ -127,3 +127,19 @@ def tailor_job_application(
     db.commit()
     db.refresh(db_cover_letter)
     return db_cover_letter
+
+@router.post("/extension-logs")
+def create_extension_log(
+    log_in: schemas.ExtensionLogCreate,
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    # Log details to docker/console stdout stream for analysis
+    timestamp = log_in.timestamp or datetime.datetime.utcnow().isoformat()
+    print(
+        f"[EXTENSION LOG] {timestamp} - User: {current_user.email} - "
+        f"[{log_in.level}] - Job ID: {log_in.job_id or 'N/A'} - Platform: {log_in.platform or 'N/A'} - "
+        f"Msg: {log_in.message}",
+        flush=True
+    )
+    return {"status": "ok"}
+

@@ -45,6 +45,20 @@ class JobProfile(Base):
     title = Column(String(150), nullable=False) # e.g. "Senior Software Developer"
     is_active = Column(Boolean, default=False)
     resume_id = Column(Integer, ForeignKey("resumes.id"), nullable=True)
+    
+    # Knowledge Base Auto-fill parameters
+    phone = Column(String(50), nullable=True)
+    email = Column(String(100), nullable=True)
+    nationality = Column(String(100), nullable=True)
+    visa_sponsorship = Column(String(100), nullable=True)
+    disability_status = Column(String(100), nullable=True)
+    veteran_status = Column(String(100), nullable=True)
+    ethnicity = Column(String(100), nullable=True)
+    gender = Column(String(50), nullable=True)
+    languages = Column(String(255), nullable=True)
+    skills = Column(Text, nullable=True)
+    work_authorization = Column(String(100), nullable=True)
+
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
