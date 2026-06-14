@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI Job Apply | Automate Your Career</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Geist:wght@400;500;600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-container": "#571bc1",
+                    "secondary-fixed-dim": "#d0bcff",
+                    "on-tertiary-container": "#2a2a29",
+                    "surface-container": "#1d2022",
+                    "outline": "#908fa0",
+                    "on-secondary-fixed-variant": "#5516be",
+                    "on-secondary": "#3c0091",
+                    "on-secondary-container": "#c4abff",
+                    "tertiary-container": "#929090",
+                    "inverse-on-surface": "#2d3133",
+                    "secondary-fixed": "#e9ddff",
+                    "inverse-primary": "#494bd6",
+                    "on-surface-variant": "#c7c4d7",
+                    "surface-container-high": "#272a2c",
+                    "on-primary-container": "#0d0096",
+                    "primary-fixed-dim": "#c0c1ff",
+                    "error-container": "#93000a",
+                    "surface-tint": "#c0c1ff",
+                    "on-tertiary-fixed-variant": "#474646",
+                    "surface-container-lowest": "#0b0f10",
+                    "inverse-surface": "#e0e3e5",
+                    "on-error-container": "#ffdad6",
+                    "surface": "#101415",
+                    "surface-container-low": "#191c1e",
+                    "surface-variant": "#323537",
+                    "on-tertiary": "#313030",
+                    "surface-dim": "#101415",
+                    "on-surface": "#e0e3e5",
+                    "on-tertiary-fixed": "#1c1b1b",
+                    "surface-bright": "#363a3b",
+                    "primary-fixed": "#e1e0ff",
+                    "tertiary-fixed-dim": "#c9c6c5",
+                    "surface-container-highest": "#323537",
+                    "on-primary": "#1000a9",
+                    "tertiary": "#c9c6c5",
+                    "outline-variant": "#464554",
+                    "on-error": "#690005",
+                    "primary": "#c0c1ff",
+                    "on-primary-fixed": "#07006c",
+                    "on-primary-fixed-variant": "#2f2ebe",
+                    "tertiary-fixed": "#e5e2e1",
+                    "primary-container": "#8083ff",
+                    "secondary": "#d0bcff",
+                    "error": "#ffb4ab",
+                    "on-secondary-fixed": "#23005c",
+                    "background": "#101415",
+                    "on-background": "#e0e3e5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "container-max": "1280px",
+                    "margin-desktop": "48px",
+                    "gutter": "24px",
+                    "unit": "8px",
+                    "margin-mobile": "16px",
+                    "stack-xs": "4px",
+                    "stack-lg": "48px",
+                    "stack-md": "24px",
+                    "stack-sm": "12px"
+            },
+            "fontFamily": {
+                    "body-lg": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "label-sm": ["Geist"],
+                    "display-lg-mobile": ["Inter"],
+                    "headline-xl": ["Inter"],
+                    "body-md": ["Inter"],
+                    "label-md": ["Geist"]
+            },
+            "fontSize": {
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-lg": ["28px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "display-lg": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "800"}],
+                    "label-sm": ["12px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                    "display-lg-mobile": ["40px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "headline-xl": ["36px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "label-md": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.02em", "fontWeight": "500"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            vertical-align: middle;
+        }
+        
+        .glass-card {
+            backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.3s ease;
+        }
+        
+        .glass-card:hover {
+            backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .neon-glow {
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+        }
+        
+        .neon-glow:hover {
+            box-shadow: 0 0 40px rgba(99, 102, 241, 0.6);
+        }
+
+        .bg-mesh {
+            background-color: #0A0A0A;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
+        }
+
+        body {
+            background-color: #0A0A0A;
+            color: #e0e3e5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 0.8; }
+        }
+        .ai-pulse {
+            animation: pulse-slow 3s infinite ease-in-out;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-mesh min-h-screen selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/30 dark:bg-surface/30 backdrop-blur-2xl border-b border-white/10 shadow-[0_20px_40px_rgba(99,102,241,0.1)]">
+<nav class="flex justify-between items-center px-margin-mobile md:px-margin-desktop py-4 max-w-container-max mx-auto">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary font-bold" style="font-size: 32px;">auto_awesome</span>
+<span class="font-headline-xl text-headline-xl-mobile md:text-headline-xl font-bold bg-gradient-to-r from-primary via-secondary to-secondary-container bg-clip-text text-transparent">AI Job Apply</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="font-label-md text-label-md text-primary border-b-2 border-primary pb-1" href="#">Features</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Pricing</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Testimonials</a>
+</div>
+<button class="active:scale-95 transition-transform bg-primary-container text-on-primary-container px-6 py-2 rounded-full font-label-md text-label-md font-bold">
+                Login
+            </button>
+</nav>
+</header>
+<main class="pt-24">
+<!-- Hero Section -->
+<section class="px-margin-mobile md:px-margin-desktop py-stack-lg flex flex-col items-center text-center max-w-4xl mx-auto">
+<div class="inline-flex items-center gap-2 px-4 py-1 rounded-full glass-card mb-8">
+<span class="material-symbols-outlined text-primary text-[16px]" style="font-variation-settings: 'FILL' 1;">bolt</span>
+<span class="font-label-sm text-label-sm tracking-widest uppercase">The Future of Employment</span>
+</div>
+<h1 class="font-display-lg-mobile md:font-display-lg text-display-lg-mobile md:text-display-lg mb-6 leading-tight">
+                Automate Your Job <br class="hidden md:block"/> Search with <span class="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">AI</span>
+</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-12 max-w-2xl">
+                Land your dream job 10x faster with our intelligent application engine. We tailor your presence and handle the busywork while you prepare for interviews.
+            </p>
+<div class="flex flex-col sm:flex-row gap-gutter">
+<button class="bg-gradient-to-r from-primary-container to-secondary-container text-white px-10 py-5 rounded-xl font-headline-lg text-headline-lg-mobile md:text-headline-lg neon-glow transition-all duration-300 hover:scale-105 active:scale-95 flex items-center justify-center gap-3">
+                    Get Started
+                    <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+<div class="mt-16 w-full relative">
+<div class="absolute -inset-4 bg-primary/20 blur-3xl rounded-full ai-pulse"></div>
+<div class="relative glass-card rounded-2xl overflow-hidden aspect-video md:aspect-[21/9]">
+<img class="w-full h-full object-cover opacity-80" data-alt="A futuristic dashboard interface showcasing AI-driven job application statistics and real-time tracking data. The screen features sleek violet and indigo data visualizations, frosted glass panels, and floating notification elements. The lighting is low-key with vibrant neon accents reflecting off the digital glass surfaces in a high-end obsidian tech aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDYSlC96uFbwc6SKWUixC7pfivzMwRX4tITL4RRxLQwRsEBjyKJ-1G7uk4LI_2fE3HVQ7iyUhe5TJh716VevtNXB0xaVBT_HVhMvYtYthVtGI4VP85c2gEYNdh5HD1yXubM9YHGWlbH3grSDyQho6HMcz6ua6c3NOAeNQX7fztQkzx4lLPA_g5ZcAyiuv4GfDTraq6RBvGuwovR4JW1CQHJuVLWJtsMA-LJML7_XEGGKlHY5vagTSx8XeR7HX1LQrZ-8FJcwfUprVw"/>
+</div>
+</div>
+</section>
+<!-- Features Bento Grid -->
+<section class="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-container-max mx-auto">
+<h2 class="font-headline-xl text-headline-xl-mobile md:text-headline-xl mb-12 text-center">Unfair Advantages</h2>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Large Feature -->
+<div class="md:col-span-8 glass-card rounded-3xl p-8 flex flex-col justify-between overflow-hidden relative group">
+<div class="relative z-10">
+<span class="material-symbols-outlined text-primary text-4xl mb-4">edit_document</span>
+<h3 class="font-headline-lg text-headline-lg mb-4">Auto-Tailored Resumes</h3>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-md">Our AI analyzes every job description and re-engineers your resume to match the exact keywords and sentiment recruiters are looking for.</p>
+</div>
+<div class="absolute right-[-10%] bottom-[-10%] w-2/3 opacity-20 group-hover:opacity-40 transition-opacity">
+<span class="material-symbols-outlined text-[300px] text-primary">description</span>
+</div>
+</div>
+<!-- Small Feature -->
+<div class="md:col-span-4 glass-card rounded-3xl p-8 flex flex-col justify-end min-h-[300px]">
+<span class="material-symbols-outlined text-secondary text-4xl mb-4">schedule</span>
+<h3 class="font-headline-lg text-headline-lg mb-4">24/7 AI Job Hunting</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">While you sleep, our engine scans thousands of boards to find and apply to roles within minutes of posting.</p>
+</div>
+<!-- Middle Small -->
+<div class="md:col-span-4 glass-card rounded-3xl p-8 flex flex-col">
+<span class="material-symbols-outlined text-tertiary text-4xl mb-4">insights</span>
+<h3 class="font-headline-lg text-headline-lg mb-4">Smart Tracking</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">A unified dashboard that centralizes every application, follow-up, and interview schedule automatically.</p>
+</div>
+<!-- Wide Visual Feature -->
+<div class="md:col-span-8 glass-card rounded-3xl p-8 flex flex-col md:flex-row items-center gap-gutter overflow-hidden">
+<div class="flex-1">
+<h3 class="font-headline-lg text-headline-lg mb-4">Real-time Insights</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6">Receive detailed feedback on why certain roles are a perfect match and how to optimize your chances for each specific company.</p>
+<button class="text-primary font-label-md flex items-center gap-2 hover:translate-x-2 transition-transform">
+                            Learn more <span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+<div class="flex-1 w-full h-48 rounded-xl overflow-hidden glass-card">
+<img class="w-full h-full object-cover" data-alt="A close-up of a complex analytical interface with holographic charts and graphs glowing in neon indigo. The visualization shows job market trends and matching percentages in a sharp, high-definition digital style. The background is a deep obsidian dark mode with subtle purple light leaks and high-end tech aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_eb8ZI1ryDrvPJyNEZxdviNARfGWc6dRcSP_b4uYCuX6pN1Zvfiyr0wiAPienXlSbvux_1T8CB-EQCNqwZ_94YDi3szRnyXqBK1tMBqmHx6SIAgCISLit-UipShCbGSA0jvIlSN1RYxIc7XtPvJvaS4mziFrnv3K2pok8OF5XGa7zW1fNjHhVhOfwheAWcv2xoc1gZbezULeB9BP_5XBvJbM-C05XaWo9L4euP2v627nCRD6l_ahiKte-1ZrNb5FSeUhz8WNq39A"/>
+</div>
+</div>
+</div>
+</section>
+<!-- Stats Section -->
+<section class="bg-surface-container-lowest/50 py-stack-lg border-y border-white/5">
+<div class="px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
+<div class="flex flex-col gap-2">
+<span class="font-display-lg-mobile md:font-headline-xl text-primary font-extrabold tracking-tight">500k+</span>
+<span class="font-label-md text-on-surface-variant tracking-widest uppercase">Active Users</span>
+</div>
+<div class="flex flex-col gap-2">
+<span class="font-display-lg-mobile md:font-headline-xl text-secondary font-extrabold tracking-tight">10M+</span>
+<span class="font-label-md text-on-surface-variant tracking-widest uppercase">Applications Sent</span>
+</div>
+<div class="flex flex-col gap-2">
+<span class="font-display-lg-mobile md:font-headline-xl text-tertiary font-extrabold tracking-tight">95%</span>
+<span class="font-label-md text-on-surface-variant tracking-widest uppercase">Success Rate</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Testimonials -->
+<section class="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-container-max mx-auto text-center">
+<h2 class="font-headline-xl text-headline-xl-mobile md:text-headline-xl mb-16">Loved by Professionals</h2>
+<div class="max-w-3xl mx-auto glass-card p-12 rounded-[40px] relative">
+<span class="material-symbols-outlined text-primary text-6xl opacity-20 absolute top-8 left-8">format_quote</span>
+<p class="font-headline-lg text-headline-lg-mobile md:text-headline-lg italic mb-8 relative z-10 leading-relaxed">
+                    "AI Job Apply saved me weeks of manual work. I got 3 interviews in my first week! The tailored resume feature is literally magic."
+                </p>
+<div class="flex flex-col items-center gap-4">
+<div class="w-16 h-16 rounded-full border-2 border-primary p-1">
+<img class="w-full h-full object-cover rounded-full" data-alt="A professional headshot of a young woman smiling confidently, framed in a high-end studio setting with soft indigo backlighting. She has a modern, clean look suitable for a tech professional. The lighting is sophisticated and warm, contrasting with the cool deep blue background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuArCpcqDb3ryHtJK-Chgqi3YBqiZ_Jm76M_7jyqqWUqZTAGDf2mG6yt3lv_ZsTAFmFkCccYojYFOKOy09I0JiVa3iykVuDddso3O76ig73zyWAGMmOdU_tCd_dgUN-Fiqkmcova3dRK9GvCNE0l7pvVUmB5fkgxMs8wl6NCABNpmBG4-lP0gSV3zuqmVMwcbnyeYXWPEhaAosEM0sVLcPPxY7OdKeLt3QOMoX_vdqESPSNz_ao8_zsHy9K_gAkcXm4e57EHw290YBE"/>
+</div>
+<div>
+<p class="font-label-md text-on-surface font-bold">Sarah J.</p>
+<p class="font-label-sm text-on-surface-variant">Senior Product Designer @ Techflow</p>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Final -->
+<section class="px-margin-mobile md:px-margin-desktop py-stack-lg max-w-container-max mx-auto mb-20">
+<div class="bg-gradient-to-br from-secondary-container/20 to-primary-container/20 rounded-[48px] p-12 text-center border border-white/10 backdrop-blur-3xl">
+<h2 class="font-headline-xl text-headline-xl mb-6">Ready to skip the queue?</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-10 max-w-xl mx-auto">Join thousands of others landing roles at top companies without the manual grind.</p>
+<button class="bg-white text-background px-12 py-4 rounded-full font-label-md text-label-md font-extrabold hover:bg-primary-container hover:text-white transition-all duration-300">
+                    Get Started Now
+                </button>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full py-stack-md bg-surface-container-lowest dark:bg-surface-container-lowest border-t border-white/5">
+<div class="flex flex-col md:flex-row justify-between items-center px-margin-mobile md:px-margin-desktop gap-gutter max-w-container-max mx-auto">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-2xl">auto_awesome</span>
+<span class="font-headline-lg text-on-surface font-bold">AI Job Apply</span>
+</div>
+<div class="flex gap-8">
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors cursor-pointer" href="#">Features</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors cursor-pointer" href="#">Pricing</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors cursor-pointer" href="#">Terms</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors cursor-pointer" href="#">Privacy</a>
+</div>
+<p class="font-label-md text-label-md text-on-surface-variant">© 2024 AI Job Apply. All rights reserved.</p>
+</div>
+</footer>
+<script>
+        // Simple intersection observer for reveal animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.glass-card').forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'all 0.6s cubic-bezier(0.23, 1, 0.32, 1)';
+            observer.observe(card);
+        });
+    </script>
+</body></html>

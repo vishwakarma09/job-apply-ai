@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Senior Product Designer - Google</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Geist:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-fixed-variant": "#2f2ebe",
+                    "tertiary-container": "#929090",
+                    "surface-container-high": "#272a2c",
+                    "tertiary-fixed": "#e5e2e1",
+                    "on-tertiary": "#313030",
+                    "on-error": "#690005",
+                    "primary-container": "#8083ff",
+                    "on-secondary-container": "#c4abff",
+                    "on-secondary-fixed-variant": "#5516be",
+                    "error-container": "#93000a",
+                    "secondary-fixed": "#e9ddff",
+                    "outline-variant": "#464554",
+                    "outline": "#908fa0",
+                    "on-primary-container": "#0d0096",
+                    "on-surface-variant": "#c7c4d7",
+                    "on-primary": "#1000a9",
+                    "tertiary-fixed-dim": "#c9c6c5",
+                    "surface-tint": "#c0c1ff",
+                    "surface-container-low": "#191c1e",
+                    "secondary-container": "#571bc1",
+                    "surface-variant": "#323537",
+                    "on-surface": "#e0e3e5",
+                    "on-secondary": "#3c0091",
+                    "surface-bright": "#363a3b",
+                    "primary-fixed": "#e1e0ff",
+                    "primary": "#c0c1ff",
+                    "tertiary": "#c9c6c5",
+                    "surface-container-highest": "#323537",
+                    "surface-container": "#1d2022",
+                    "on-tertiary-fixed-variant": "#474646",
+                    "inverse-surface": "#e0e3e5",
+                    "secondary": "#d0bcff",
+                    "inverse-on-surface": "#2d3133",
+                    "surface": "#101415",
+                    "secondary-fixed-dim": "#d0bcff",
+                    "on-secondary-fixed": "#23005c",
+                    "surface-dim": "#101415",
+                    "on-tertiary-container": "#2a2a29",
+                    "on-background": "#e0e3e5",
+                    "on-error-container": "#ffdad6",
+                    "error": "#ffb4ab",
+                    "inverse-primary": "#494bd6",
+                    "on-primary-fixed": "#07006c",
+                    "background": "#101415",
+                    "surface-container-lowest": "#0b0f10",
+                    "on-tertiary-fixed": "#1c1b1b",
+                    "primary-fixed-dim": "#c0c1ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "stack-md": "24px",
+                    "stack-lg": "48px",
+                    "unit": "8px",
+                    "gutter": "24px",
+                    "container-max": "1280px",
+                    "margin-desktop": "48px",
+                    "stack-xs": "4px",
+                    "stack-sm": "12px"
+            },
+            "fontFamily": {
+                    "headline-xl": ["Inter"],
+                    "label-sm": ["Geist"],
+                    "display-lg-mobile": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-md": ["Geist"],
+                    "headline-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-xl": ["36px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                    "display-lg-mobile": ["40px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "display-lg": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "800"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "label-md": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                    "headline-lg": ["28px", {"lineHeight": "1.3", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #0A0A0A;
+            color: #e0e3e5;
+            -webkit-font-smoothing: antialiased;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card-hover:hover {
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .aura-blur {
+            position: fixed;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+            filter: blur(60px);
+            z-index: -1;
+        }
+        .neon-glow {
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md text-body-md overflow-x-hidden pb-24">
+<!-- Ambient Background Effects -->
+<div class="aura-blur top-[-50px] right-[-50px]"></div>
+<div class="aura-blur bottom-[-50px] left-[-50px]"></div>
+<!-- Header Section -->
+<header class="fixed top-0 w-full z-50 bg-surface/30 backdrop-blur-xl border-b border-white/10 px-margin-mobile py-4 flex items-center gap-4">
+<button class="w-10 h-10 flex items-center justify-center rounded-full glass-card active:scale-95 transition-transform" onclick="history.back()">
+<span class="material-symbols-outlined text-primary">arrow_back</span>
+</button>
+<div class="flex-1">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface truncate leading-tight">Senior Product Designer</h1>
+<p class="font-label-md text-label-md text-on-surface-variant flex items-center gap-2">
+                Google <span class="w-1 h-1 bg-white/20 rounded-full"></span> Mountain View, CA
+            </p>
+</div>
+</header>
+<main class="mt-24 px-margin-mobile space-y-stack-md max-w-md mx-auto">
+<!-- Metadata & Status -->
+<div class="flex flex-wrap items-center justify-between gap-stack-sm">
+<div class="flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant/60 uppercase tracking-widest">Application Status</span>
+<div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary-container/20 border border-secondary-container/40 text-secondary backdrop-blur-md">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span class="font-label-md text-label-md">First Round</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-on-surface-variant/60 uppercase tracking-widest block">Date Applied</span>
+<span class="font-label-md text-label-md text-on-surface">Oct 24, 2023</span>
+</div>
+</div>
+<!-- Salary Highlight -->
+<div class="glass-card rounded-xl p-4 flex items-center justify-between bg-gradient-to-br from-white/[0.02] to-transparent">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">payments</span>
+</div>
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Annual Salary</p>
+<p class="font-headline-lg-mobile text-headline-lg-mobile text-primary">$150k - $180k</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant/40">trending_up</span>
+</div>
+<!-- AI Generator Card -->
+<section class="glass-card rounded-2xl p-6 relative overflow-hidden border-primary/20 bg-gradient-to-tr from-primary/5 to-transparent">
+<div class="absolute -right-12 -top-12 w-40 h-40 bg-primary/10 blur-[60px]"></div>
+<div class="relative z-10 flex flex-col gap-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<h3 class="font-label-md text-label-md font-bold text-primary uppercase tracking-wider">AI Optimizer</h3>
+</div>
+<p class="text-on-surface-variant text-body-md">Your resume matches 88% of Google's criteria. Let's tailor your cover letter for the interview.</p>
+<button class="w-full py-4 rounded-xl bg-gradient-to-r from-primary-container to-secondary-container text-on-primary-container font-bold flex items-center justify-center gap-2 neon-glow active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[20px]">magic_button</span>
+                    Tailor Application
+                </button>
+</div>
+</section>
+<!-- Tabbed Interface -->
+<section>
+<div class="flex border-b border-white/5 mb-4 overflow-x-auto scrollbar-hide">
+<button class="px-4 py-3 font-label-md text-label-md text-primary border-b-2 border-primary transition-all whitespace-nowrap" id="btn-cover" onclick="switchTab('cover')">Tailored Cover Letter</button>
+<button class="px-4 py-3 font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-all whitespace-nowrap" id="btn-desc" onclick="switchTab('desc')">Job Description</button>
+</div>
+<div class="glass-card rounded-2xl p-6 leading-relaxed text-on-surface-variant space-y-4" id="tab-cover">
+<p class="font-body-md">Dear Google Hiring Team,</p>
+<p class="font-body-md">I am writing to express my intense interest in the Senior Product Designer role at Google's Mountain View campus. With over 6 years of experience scaling complex AI-integrated design systems, I have consistently driven user-centric solutions that balance technical constraints with delightful experiences.</p>
+<p class="font-body-md">My recent work on obsidian-themed glassmorphic interfaces for SaaS dashboards aligns perfectly with Google's vision for sophisticated, high-performance tooling...</p>
+<div class="pt-4 border-t border-white/5 flex items-center justify-between">
+<span class="text-xs text-on-surface-variant/40 italic">Generated by AI Apply Assistant</span>
+<button class="text-primary font-label-sm text-label-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">content_copy</span> Copy
+                    </button>
+</div>
+</div>
+<div class="hidden glass-card rounded-2xl p-6 text-on-surface-variant space-y-4" id="tab-desc">
+<h4 class="font-bold text-on-surface">Minimum Qualifications</h4>
+<ul class="list-disc list-inside space-y-2 text-body-md">
+<li>6+ years of experience in product design.</li>
+<li>Expertise in Figma and design systems.</li>
+<li>Experience designing for complex enterprise software.</li>
+</ul>
+<h4 class="font-bold text-on-surface mt-4">Preferred Qualifications</h4>
+<p class="text-body-md">Experience with AI/ML interface design and knowledge of Glassmorphism principles is a strong plus.</p>
+</div>
+</section>
+<!-- Conversation Timeline -->
+<section class="space-y-4">
+<h3 class="font-label-md text-label-md text-on-surface-variant/60 uppercase tracking-widest pl-2">Recruiter Interaction</h3>
+<div class="relative pl-4 space-y-6 before:content-[''] before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-[2px] before:bg-white/5">
+<!-- Message 1 -->
+<div class="relative">
+<div class="absolute left-[-11px] top-1 w-4 h-4 rounded-full bg-surface border-2 border-primary z-10"></div>
+<div class="ml-6 glass-card rounded-2xl p-4">
+<div class="flex justify-between items-start mb-2">
+<span class="font-bold text-on-surface text-label-md">Sarah Chen</span>
+<span class="text-[10px] text-on-surface-variant/40">OCT 25</span>
+</div>
+<p class="text-body-md">"Hi! We loved your portfolio. Can you talk on Thursday at 2 PM for a quick initial screening?"</p>
+</div>
+</div>
+<!-- Message 2 (You) -->
+<div class="relative">
+<div class="absolute left-[-11px] top-1 w-4 h-4 rounded-full bg-surface border-2 border-secondary z-10"></div>
+<div class="ml-6 bg-secondary/10 border border-secondary/20 backdrop-blur-md rounded-2xl p-4">
+<div class="flex justify-between items-start mb-2">
+<span class="font-bold text-secondary text-label-md">You</span>
+<span class="text-[10px] text-on-surface-variant/40">OCT 25</span>
+</div>
+<p class="text-body-md">"That sounds great! I'm available. Looking forward to discussing the role."</p>
+</div>
+</div>
+<!-- Message 3 -->
+<div class="relative">
+<div class="absolute left-[-11px] top-1 w-4 h-4 rounded-full bg-surface border-2 border-primary z-10"></div>
+<div class="ml-6 glass-card rounded-2xl p-4 opacity-60">
+<div class="flex justify-between items-start mb-2">
+<span class="font-bold text-on-surface text-label-md">Sarah Chen</span>
+<span class="text-[10px] text-on-surface-variant/40">PENDING</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex gap-1">
+<span class="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce"></span>
+<span class="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" style="animation-delay: 0.2s"></span>
+<span class="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" style="animation-delay: 0.4s"></span>
+</div>
+<span class="text-xs italic">Sarah is typing...</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar (Shell) -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface/40 backdrop-blur-2xl border-t border-white/10 rounded-t-xl h-20 px-4 pb-safe flex justify-around items-center shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+<a class="flex flex-col items-center justify-center text-on-surface-variant/70 hover:text-primary/80 transition-all active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined">explore</span>
+<span class="font-label-md text-label-md">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary font-bold transition-all active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">assignment_turned_in</span>
+<span class="font-label-md text-label-md">Applied</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant/70 hover:text-primary/80 transition-all active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined">bookmark</span>
+<span class="font-label-md text-label-md">Saved</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant/70 hover:text-primary/80 transition-all active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-md text-label-md">Profile</span>
+</a>
+</nav>
+<script>
+        function switchTab(tab) {
+            const coverTab = document.getElementById('tab-cover');
+            const descTab = document.getElementById('tab-desc');
+            const btnCover = document.getElementById('btn-cover');
+            const btnDesc = document.getElementById('btn-desc');
+
+            if (tab === 'cover') {
+                coverTab.classList.remove('hidden');
+                descTab.classList.add('hidden');
+                btnCover.classList.add('text-primary', 'border-primary', 'border-b-2');
+                btnCover.classList.remove('text-on-surface-variant');
+                btnDesc.classList.remove('text-primary', 'border-primary', 'border-b-2');
+                btnDesc.classList.add('text-on-surface-variant');
+            } else {
+                coverTab.classList.add('hidden');
+                descTab.classList.remove('hidden');
+                btnDesc.classList.add('text-primary', 'border-primary', 'border-b-2');
+                btnDesc.classList.remove('text-on-surface-variant');
+                btnCover.classList.remove('text-primary', 'border-primary', 'border-b-2');
+                btnCover.classList.add('text-on-surface-variant');
+            }
+        }
+    </script>
+</body></html>

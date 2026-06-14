@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Application Tracker | AI Job Apply</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;family=Geist:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "background": "#101415",
+                    "outline": "#908fa0",
+                    "on-tertiary-fixed": "#1c1b1b",
+                    "on-background": "#e0e3e5",
+                    "on-primary-container": "#0d0096",
+                    "error": "#ffb4ab",
+                    "on-primary-fixed-variant": "#2f2ebe",
+                    "on-primary": "#1000a9",
+                    "surface-container-highest": "#323537",
+                    "on-tertiary-fixed-variant": "#474646",
+                    "surface-container": "#1d2022",
+                    "primary-fixed-dim": "#c0c1ff",
+                    "tertiary-fixed": "#e5e2e1",
+                    "inverse-on-surface": "#2d3133",
+                    "on-error-container": "#ffdad6",
+                    "tertiary-fixed-dim": "#c9c6c5",
+                    "surface-container-low": "#191c1e",
+                    "secondary-fixed-dim": "#d0bcff",
+                    "on-secondary": "#3c0091",
+                    "primary-fixed": "#e1e0ff",
+                    "on-secondary-container": "#c4abff",
+                    "surface-dim": "#101415",
+                    "surface-container-lowest": "#0b0f10",
+                    "surface-container-high": "#272a2c",
+                    "error-container": "#93000a",
+                    "on-tertiary": "#313030",
+                    "on-primary-fixed": "#07006c",
+                    "primary": "#c0c1ff",
+                    "tertiary-container": "#929090",
+                    "secondary-fixed": "#e9ddff",
+                    "inverse-surface": "#e0e3e5",
+                    "on-surface-variant": "#c7c4d7",
+                    "on-surface": "#e0e3e5",
+                    "primary-container": "#8083ff",
+                    "outline-variant": "#464554",
+                    "tertiary": "#c9c6c5",
+                    "surface-variant": "#323537",
+                    "on-tertiary-container": "#2a2a29",
+                    "on-secondary-fixed": "#23005c",
+                    "on-secondary-fixed-variant": "#5516be",
+                    "surface-bright": "#363a3b",
+                    "surface": "#101415",
+                    "secondary": "#d0bcff",
+                    "secondary-container": "#571bc1",
+                    "inverse-primary": "#494bd6",
+                    "on-error": "#690005",
+                    "surface-tint": "#c0c1ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "stack-md": "24px",
+                    "margin-desktop": "48px",
+                    "unit": "8px",
+                    "stack-lg": "48px",
+                    "stack-xs": "4px",
+                    "container-max": "1280px",
+                    "stack-sm": "12px",
+                    "gutter": "24px"
+            },
+            "fontFamily": {
+                    "body-md": ["Inter"],
+                    "label-md": ["Geist"],
+                    "display-lg": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-xl": ["Inter"],
+                    "label-sm": ["Geist"],
+                    "display-lg-mobile": ["Inter"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "label-md": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                    "display-lg": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "800"}],
+                    "headline-lg": ["28px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-xl": ["36px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-sm": ["12px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                    "display-lg-mobile": ["40px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #0A0A0A;
+            color: #e0e3e5;
+            overflow-x: hidden;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.3s ease;
+        }
+        .glass-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 0 20px rgba(192, 193, 255, 0.1);
+        }
+        .kanban-column {
+            min-width: 320px;
+            max-width: 320px;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(192, 193, 255, 0.2);
+            border-radius: 10px;
+        }
+        .glow-aura {
+            position: fixed;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(192, 193, 255, 0.05) 0%, rgba(10, 10, 10, 0) 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md text-body-md pb-24">
+<!-- Ambient background effects -->
+<div class="glow-aura top-[-200px] left-[-200px]"></div>
+<div class="glow-aura bottom-[-200px] right-[-200px]"></div>
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-3xl border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)] flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16">
+<div class="flex items-center gap-3 cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<h1 class="font-headline-xl text-headline-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">AI Job Apply</h1>
+</div>
+<nav class="hidden md:flex items-center gap-8">
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-300 font-label-md text-label-md" href="#">Explore</a>
+<a class="text-primary border-b-2 border-primary transition-colors duration-300 font-label-md text-label-md" href="#">Applied</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors duration-300 font-label-md text-label-md" href="#">Saved</a>
+</nav>
+<div class="w-10 h-10 rounded-full border border-white/20 overflow-hidden cursor-pointer active:scale-95 transition-transform">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a modern creative professional with a confident expression, set against a dark, minimalist studio background. The lighting is dramatic and moody, highlighting sharp features with a soft blue rim light that complements the obsidian and indigo UI theme. High-resolution photography focusing on texture and depth." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbSQ1K2eQjlrx6ZAw_PKJMBCCGUEJXfmWnm5I0jawcrOhcoguOmGIJL6Vo5yVEFO7kFc4sqZ3PEzTdDiBhKDuHMxKWt2Q4NOjKTeHTqChjEm6_8OGOjdtqziHonhTRljfTbP6bpxvmcxdreAu3nWpFfzEGW1trCl1D1B9NkyFQr-toNo_Q4lJ7YZ1pt8x-GM6EIPwiBnztvfAG-fkRB8MneQ6xMJ2k7Pa56a8LvwsbqOelGXxSPcAPJ2LmI6nuZVh4lGNadO-ATAk"/>
+</div>
+</header>
+<main class="pt-24 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+<!-- Dashboard Header -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-stack-lg">
+<div>
+<h2 class="font-headline-xl text-headline-xl text-on-surface mb-2">Application Tracker</h2>
+<p class="text-on-surface-variant font-body-md text-body-md max-w-xl">
+                    Manage your AI-powered career journey. Your personalized pipeline for high-value roles is being continuously optimized.
+                </p>
+</div>
+<!-- Search & Filter Cluster -->
+<div class="flex items-center gap-3 w-full md:w-auto">
+<div class="relative flex-grow md:w-72">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-[20px]">search</span>
+<input class="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-on-surface focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all font-body-md text-body-md" placeholder="Search applications..." type="text"/>
+</div>
+<button class="glass-card p-3 rounded-xl flex items-center justify-center hover:text-primary cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">filter_list</span>
+</button>
+</div>
+</div>
+<!-- Kanban Board Wrapper -->
+<div class="flex gap-gutter overflow-x-auto pb-8 custom-scrollbar">
+<!-- Applied Column (3 cards) -->
+<div class="kanban-column flex flex-col gap-stack-md">
+<div class="flex items-center justify-between px-2">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+                        Applied
+                    </h3>
+<span class="text-label-sm text-outline px-2 py-0.5 rounded-full bg-white/5">3</span>
+</div>
+<!-- Card 1 -->
+<div class="glass-card rounded-xl p-stack-md group">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center border border-white/10">
+<span class="material-symbols-outlined text-primary">hub</span>
+</div>
+<span class="text-label-sm text-outline">Oct 24</span>
+</div>
+<h4 class="font-headline-lg text-[20px] text-on-surface group-hover:text-primary transition-colors">Senior Product Designer</h4>
+<p class="text-primary-fixed-dim font-label-md text-label-md mb-4">Google</p>
+<div class="flex flex-wrap gap-2 mb-6">
+<span class="bg-primary/10 text-primary-fixed-dim px-3 py-1 rounded-full text-[11px] font-bold tracking-tight border border-primary/20 backdrop-blur-md">AI OPTIMIZED</span>
+<span class="bg-secondary/10 text-secondary-fixed-dim px-3 py-1 rounded-full text-[11px] font-bold tracking-tight border border-secondary/20 backdrop-blur-md">RESUME TAILORED</span>
+</div>
+<div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+<span class="text-on-surface-variant text-label-sm">$150k - $180k</span>
+<span class="material-symbols-outlined text-outline text-[18px] cursor-pointer hover:text-primary transition-colors">more_horiz</span>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="glass-card rounded-xl p-stack-md group">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center border border-white/10">
+<span class="material-symbols-outlined text-primary">animation</span>
+</div>
+<span class="text-label-sm text-outline">Oct 22</span>
+</div>
+<h4 class="font-headline-lg text-[20px] text-on-surface group-hover:text-primary transition-colors">Staff UI Engineer</h4>
+<p class="text-primary-fixed-dim font-label-md text-label-md mb-4">Meta</p>
+<div class="flex flex-wrap gap-2 mb-6">
+<span class="bg-primary/10 text-primary-fixed-dim px-3 py-1 rounded-full text-[11px] font-bold tracking-tight border border-primary/20 backdrop-blur-md">AI OPTIMIZED</span>
+</div>
+<div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+<span class="text-on-surface-variant text-label-sm">$220k - $260k</span>
+<span class="material-symbols-outlined text-outline text-[18px] cursor-pointer hover:text-primary transition-colors">more_horiz</span>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="glass-card rounded-xl p-stack-md group">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center border border-white/10">
+<span class="material-symbols-outlined text-primary">token</span>
+</div>
+<span class="text-label-sm text-outline">Oct 20</span>
+</div>
+<h4 class="font-headline-lg text-[20px] text-on-surface group-hover:text-primary transition-colors">Design Systems Lead</h4>
+<p class="text-primary-fixed-dim font-label-md text-label-md mb-4">Airbnb</p>
+<div class="flex flex-wrap gap-2 mb-6">
+<span class="bg-secondary/10 text-secondary-fixed-dim px-3 py-1 rounded-full text-[11px] font-bold tracking-tight border border-secondary/20 backdrop-blur-md">RESUME TAILORED</span>
+</div>
+<div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+<span class="text-on-surface-variant text-label-sm">$190k - $230k</span>
+<span class="material-symbols-outlined text-outline text-[18px] cursor-pointer hover:text-primary transition-colors">more_horiz</span>
+</div>
+</div>
+</div>
+<!-- In Progress Column (2 cards) -->
+<div class="kanban-column flex flex-col gap-stack-md">
+<div class="flex items-center justify-between px-2">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+                        In Progress
+                    </h3>
+<span class="text-label-sm text-outline px-2 py-0.5 rounded-full bg-white/5">2</span>
+</div>
+<div class="glass-card rounded-xl p-stack-md group">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center border border-white/10">
+<span class="material-symbols-outlined text-secondary">database</span>
+</div>
+<span class="text-label-sm text-outline">Oct 15</span>
+</div>
+<h4 class="font-headline-lg text-[20px] text-on-surface group-hover:text-primary transition-colors">Fullstack AI Architect</h4>
+<p class="text-primary-fixed-dim font-label-md text-label-md mb-4">Anthropic</p>
+<div class="flex flex-wrap gap-2 mb-6">
+<span class="bg-primary/10 text-primary-fixed-dim px-3 py-1 rounded-full text-[11px] font-bold tracking-tight border border-primary/20 backdrop-blur-md">AI OPTIMIZED</span>
+</div>
+<div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+<span class="text-on-surface-variant text-label-sm">$280k - $340k</span>
+<span class="material-symbols-outlined text-outline text-[18px]">more_horiz</span>
+</div>
+</div>
+<div class="glass-card rounded-xl p-stack-md group">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center border border-white/10">
+<span class="material-symbols-outlined text-secondary">cloud</span>
+</div>
+<span class="text-label-sm text-outline">Oct 12</span>
+</div>
+<h4 class="font-headline-lg text-[20px] text-on-surface group-hover:text-primary transition-colors">Product Lead</h4>
+<p class="text-primary-fixed-dim font-label-md text-label-md mb-4">OpenAI</p>
+<div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+<span class="text-on-surface-variant text-label-sm">$310k - $400k</span>
+<span class="material-symbols-outlined text-outline text-[18px]">more_horiz</span>
+</div>
+</div>
+</div>
+<!-- First Round Column (1 card) -->
+<div class="kanban-column flex flex-col gap-stack-md">
+<div class="flex items-center justify-between px-2">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+                        First Round
+                    </h3>
+<span class="text-label-sm text-outline px-2 py-0.5 rounded-full bg-white/5">1</span>
+</div>
+<div class="glass-card rounded-xl p-stack-md group relative overflow-hidden">
+<!-- Subtle pulsing border for active round -->
+<div class="absolute inset-0 border border-primary/20 animate-pulse rounded-xl"></div>
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center border border-white/10">
+<span class="material-symbols-outlined text-primary">groups</span>
+</div>
+<span class="text-label-sm text-primary animate-pulse">Live</span>
+</div>
+<h4 class="font-headline-lg text-[20px] text-on-surface group-hover:text-primary transition-colors">Creative Director</h4>
+<p class="text-primary-fixed-dim font-label-md text-label-md mb-4">Apple</p>
+<div class="bg-primary/5 p-3 rounded-lg border border-primary/10 mb-6">
+<p class="text-label-sm text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">calendar_today</span>
+                            Tomorrow, 10:00 AM
+                        </p>
+</div>
+<div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+<span class="text-on-surface-variant text-label-sm">$250k - $300k</span>
+<span class="material-symbols-outlined text-outline text-[18px]">more_horiz</span>
+</div>
+</div>
+</div>
+<!-- Second Round Column (1 card) -->
+<div class="kanban-column flex flex-col gap-stack-md">
+<div class="flex items-center justify-between px-2">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary-container"></span>
+                        Second Round
+                    </h3>
+<span class="text-label-sm text-outline px-2 py-0.5 rounded-full bg-white/5">1</span>
+</div>
+<div class="glass-card rounded-xl p-stack-md group">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center border border-white/10">
+<span class="material-symbols-outlined text-secondary">psychology</span>
+</div>
+<span class="text-label-sm text-outline">Oct 05</span>
+</div>
+<h4 class="font-headline-lg text-[20px] text-on-surface group-hover:text-primary transition-colors">Lead UX Researcher</h4>
+<p class="text-primary-fixed-dim font-label-md text-label-md mb-4">Notion</p>
+<div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+<span class="text-on-surface-variant text-label-sm">$170k - $210k</span>
+<span class="material-symbols-outlined text-outline text-[18px]">more_horiz</span>
+</div>
+</div>
+</div>
+<!-- Offer Column (1 card) -->
+<div class="kanban-column flex flex-col gap-stack-md">
+<div class="flex items-center justify-between px-2">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-green-400"></span>
+                        Offer
+                    </h3>
+<span class="text-label-sm text-outline px-2 py-0.5 rounded-full bg-white/5">1</span>
+</div>
+<div class="glass-card rounded-xl p-stack-md group bg-gradient-to-br from-primary/5 to-secondary/5 border-primary/30">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30 shadow-[0_0_15px_rgba(192,193,255,0.3)]">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+</div>
+<span class="text-label-sm text-primary font-bold">CONGRATS!</span>
+</div>
+<h4 class="font-headline-lg text-[20px] text-on-surface group-hover:text-primary transition-colors">Principal Designer</h4>
+<p class="text-primary-fixed-dim font-label-md text-label-md mb-4">Stripe</p>
+<div class="flex flex-col gap-3 mb-6">
+<div class="flex justify-between items-center text-label-sm">
+<span class="text-on-surface-variant">Base Salary</span>
+<span class="text-on-surface font-bold">$210,000</span>
+</div>
+<div class="flex justify-between items-center text-label-sm">
+<span class="text-on-surface-variant">Equity</span>
+<span class="text-on-surface font-bold">$450k (4yrs)</span>
+</div>
+</div>
+<button class="w-full bg-gradient-to-r from-primary to-secondary py-2 rounded-lg font-label-md text-label-md text-on-primary-container shadow-[0_0_15px_rgba(192,193,255,0.4)] active:scale-95 transition-transform">
+                        View Offer
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile & Global Anchor) -->
+<nav class="fixed bottom-0 left-0 w-full h-20 flex justify-around items-center px-margin-mobile pb-4 bg-background/60 backdrop-blur-2xl border-t border-white/10 z-50">
+<div class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all tap-highlight-transparent active:scale-90 cursor-pointer">
+<span class="material-symbols-outlined">explore</span>
+<span class="font-label-sm text-label-sm mt-1">Explore</span>
+</div>
+<div class="flex flex-col items-center justify-center text-primary drop-shadow-[0_0_8px_rgba(192,193,255,0.8)] tap-highlight-transparent active:scale-90 cursor-pointer">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">assignment_turned_in</span>
+<span class="font-label-sm text-label-sm mt-1">Applied</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all tap-highlight-transparent active:scale-90 cursor-pointer">
+<span class="material-symbols-outlined">bookmark</span>
+<span class="font-label-sm text-label-sm mt-1">Saved</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-white/5 transition-all tap-highlight-transparent active:scale-90 cursor-pointer">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-sm text-label-sm mt-1">Profile</span>
+</div>
+</nav>
+<script>
+        // Micro-interaction for Kanban horizontal scroll
+        const scrollContainer = document.querySelector('.overflow-x-auto');
+        if (scrollContainer) {
+            scrollContainer.addEventListener('wheel', (evt) => {
+                evt.preventDefault();
+                scrollContainer.scrollLeft += evt.deltaY;
+            }, { passive: false });
+        }
+
+        // Simple parallax effect for glow auroras
+        document.addEventListener('mousemove', (e) => {
+            const auroras = document.querySelectorAll('.glow-aura');
+            const x = e.clientX / window.innerWidth;
+            const y = e.clientY / window.innerHeight;
+            
+            auroras[0].style.transform = `translate(${x * 30}px, ${y * 30}px)`;
+            auroras[1].style.transform = `translate(-${x * 30}px, -${y * 30}px)`;
+        });
+    </script>
+</body></html>

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Platform Connectors | AI Job Apply</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Geist:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface": "#101415",
+                    "surface-bright": "#363a3b",
+                    "on-secondary-fixed-variant": "#5516be",
+                    "on-tertiary-container": "#2a2a29",
+                    "on-secondary-fixed": "#23005c",
+                    "tertiary": "#c9c6c5",
+                    "surface-variant": "#323537",
+                    "surface-tint": "#c0c1ff",
+                    "on-error": "#690005",
+                    "inverse-primary": "#494bd6",
+                    "secondary-container": "#571bc1",
+                    "secondary": "#d0bcff",
+                    "tertiary-container": "#929090",
+                    "primary": "#c0c1ff",
+                    "on-primary-fixed": "#07006c",
+                    "on-tertiary": "#313030",
+                    "outline-variant": "#464554",
+                    "primary-container": "#8083ff",
+                    "on-surface": "#e0e3e5",
+                    "on-surface-variant": "#c7c4d7",
+                    "secondary-fixed": "#e9ddff",
+                    "inverse-surface": "#e0e3e5",
+                    "tertiary-fixed-dim": "#c9c6c5",
+                    "on-error-container": "#ffdad6",
+                    "tertiary-fixed": "#e5e2e1",
+                    "inverse-on-surface": "#2d3133",
+                    "primary-fixed-dim": "#c0c1ff",
+                    "surface-container": "#1d2022",
+                    "on-tertiary-fixed-variant": "#474646",
+                    "error-container": "#93000a",
+                    "surface-container-high": "#272a2c",
+                    "surface-container-lowest": "#0b0f10",
+                    "surface-dim": "#101415",
+                    "primary-fixed": "#e1e0ff",
+                    "on-secondary-container": "#c4abff",
+                    "surface-container-low": "#191c1e",
+                    "secondary-fixed-dim": "#d0bcff",
+                    "on-secondary": "#3c0091",
+                    "outline": "#908fa0",
+                    "on-tertiary-fixed": "#1c1b1b",
+                    "background": "#101415",
+                    "surface-container-highest": "#323537",
+                    "on-primary": "#1000a9",
+                    "on-primary-fixed-variant": "#2f2ebe",
+                    "on-primary-container": "#0d0096",
+                    "error": "#ffb4ab",
+                    "on-background": "#e0e3e5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-sm": "12px",
+                    "gutter": "24px",
+                    "stack-xs": "4px",
+                    "container-max": "1280px",
+                    "unit": "8px",
+                    "stack-lg": "48px",
+                    "margin-mobile": "16px",
+                    "margin-desktop": "48px",
+                    "stack-md": "24px"
+            },
+            "fontFamily": {
+                    "label-sm": ["Geist"],
+                    "display-lg-mobile": ["Inter"],
+                    "headline-xl": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-md": ["Geist"],
+                    "display-lg": ["Inter"],
+                    "body-md": ["Inter"]
+            },
+            "fontSize": {
+                    "label-sm": ["12px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                    "display-lg-mobile": ["40px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "headline-xl": ["36px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-lg": ["28px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "label-md": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                    "display-lg": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "800"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #0A0A0A;
+            color: #e0e3e5;
+            -webkit-font-smoothing: antialiased;
+        }
+        .glass-card {
+            backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.3s ease;
+        }
+        .glass-card:hover {
+            backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+        .ambient-glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0) 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+        .toggle-active {
+            background: linear-gradient(to right, #8083ff, #d0bcff);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen flex flex-col">
+<!-- Ambient background effect -->
+<div class="ambient-glow top-[-300px] left-[-200px]"></div>
+<div class="ambient-glow bottom-[-300px] right-[-200px]"></div>
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/30 dark:bg-surface/30 backdrop-blur-xl border-b border-white/10 shadow-[0_20px_40px_rgba(99,102,241,0.1)]">
+<nav class="flex justify-between items-center px-margin-mobile md:px-margin-desktop py-4 w-full max-w-container-max mx-auto">
+<div class="font-headline-lg text-headline-lg font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                AI Job Apply
+            </div>
+<!-- Desktop Navigation Items -->
+<div class="hidden md:flex items-center space-x-8">
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors" href="#">Explore</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors" href="#">Applied</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors" href="#">Saved</a>
+<a class="font-label-md text-label-md text-primary border-b-2 border-primary pb-1" href="#">Profile</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-primary hover:bg-white/5 transition-colors p-2 rounded-full active:scale-95 transition-transform" data-icon="notifications">notifications</button>
+<div class="w-10 h-10 rounded-full border border-white/20 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Close up professional portrait of a tech-savvy executive with a confident expression, set against a dark architectural background with subtle violet and indigo rim lighting. High-end editorial photography style for a premium professional profile." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmpKbyrQstVqMQLCYBfgy0_ARoZEBxMqOVIiVOu_bg4DMuZxRXbnGWZFuOWOCZFsL1E0rRWMMgsoX8rnxbrvOoK9R5r2vDt4keKcNOEkP-jj2tQ_mv10vKA8bhKyxrzyBSacPHvz8I-n9JWA2f20DYebi03vzrVo_uk7SYuT7QQtC4oFL3LNkNoMPIcwNl1vLWneaa1i6Z3nbfCEV9HseO3D9p4AjdWKnAHsPf-ZLgoJXisilxggw3pGa463DXt9yzUYFvTXHmlV4"/>
+</div>
+</div>
+</nav>
+</header>
+<!-- Main Content -->
+<main class="flex-grow pt-32 pb-32 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto w-full">
+<!-- Header Section -->
+<section class="mb-12">
+<h1 class="font-headline-xl text-headline-xl text-on-surface mb-stack-sm">Platform Connectors</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant/80 max-w-2xl">
+                Sync your profiles across major job boards to automate your applications. Let our AI handle the technicalities while you focus on the interview.
+            </p>
+</section>
+<!-- Connector Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-gutter">
+<!-- LinkedIn Card -->
+<div class="glass-card rounded-xl p-stack-md flex flex-col relative overflow-hidden group">
+<div class="flex justify-between items-start mb-stack-md">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="work">work</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-headline-lg text-on-surface">LinkedIn</h3>
+<div class="flex items-center gap-2 mt-1">
+<span class="flex h-2 w-2 rounded-full bg-[#10b981] shadow-[0_0_8px_#10b981]"></span>
+<span class="font-label-sm text-label-sm text-[#10b981]">Connected</span>
+</div>
+</div>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors" data-icon="settings">settings</button>
+</div>
+<div class="flex-grow">
+<p class="font-label-md text-label-md text-on-surface-variant/60">Last sync: 2h ago</p>
+</div>
+<div class="mt-stack-md flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">Automation Status</span>
+<!-- Custom Toggle -->
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-primary peer-checked:to-secondary"></div>
+</label>
+</div>
+</div>
+<!-- Indeed Card -->
+<div class="glass-card rounded-xl p-stack-md flex flex-col relative overflow-hidden">
+<div class="flex justify-between items-start mb-stack-md">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="search">search</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-headline-lg text-on-surface">Indeed</h3>
+<div class="flex items-center gap-2 mt-1">
+<span class="flex h-2 w-2 rounded-full bg-[#10b981] shadow-[0_0_8px_#10b981]"></span>
+<span class="font-label-sm text-label-sm text-[#10b981]">Connected</span>
+</div>
+</div>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors" data-icon="settings">settings</button>
+</div>
+<div class="flex-grow">
+<p class="font-label-md text-label-md text-on-surface-variant/60">Last sync: 5h ago</p>
+</div>
+<div class="mt-stack-md flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">Automation Status</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-primary peer-checked:to-secondary"></div>
+</label>
+</div>
+</div>
+<!-- ZipRecruiter Card -->
+<div class="glass-card rounded-xl p-stack-md flex flex-col relative overflow-hidden">
+<div class="flex justify-between items-start mb-stack-md">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-variant/40 flex items-center justify-center border border-white/5">
+<span class="material-symbols-outlined text-on-surface-variant/40 text-3xl" data-icon="bolt">bolt</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-headline-lg text-on-surface">ZipRecruiter</h3>
+<div class="flex items-center gap-2 mt-1">
+<span class="flex h-2 w-2 rounded-full bg-on-surface-variant/30"></span>
+<span class="font-label-sm text-label-sm text-on-surface-variant/60">Not Connected</span>
+</div>
+</div>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant/30 transition-colors" data-icon="settings">settings</button>
+</div>
+<div class="flex-grow">
+<p class="font-label-md text-label-md text-on-surface-variant/40">Last sync: Never</p>
+</div>
+<div class="mt-stack-md">
+<button class="w-full py-3 px-6 rounded-lg font-label-md text-label-md border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all text-on-surface active:scale-[0.98]">
+                        Connect Platform
+                    </button>
+</div>
+</div>
+<!-- Glassdoor Card -->
+<div class="glass-card rounded-xl p-stack-md flex flex-col relative overflow-hidden">
+<div class="flex justify-between items-start mb-stack-md">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-variant/40 flex items-center justify-center border border-white/5">
+<span class="material-symbols-outlined text-on-surface-variant/40 text-3xl" data-icon="reviews">reviews</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-headline-lg text-on-surface">Glassdoor</h3>
+<div class="flex items-center gap-2 mt-1">
+<span class="flex h-2 w-2 rounded-full bg-on-surface-variant/30"></span>
+<span class="font-label-sm text-label-sm text-on-surface-variant/60">Not Connected</span>
+</div>
+</div>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant/30 transition-colors" data-icon="settings">settings</button>
+</div>
+<div class="flex-grow">
+<p class="font-label-md text-label-md text-on-surface-variant/40">Last sync: Never</p>
+</div>
+<div class="mt-stack-md">
+<button class="w-full py-3 px-6 rounded-lg font-label-md text-label-md border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all text-on-surface active:scale-[0.98]">
+                        Connect Platform
+                    </button>
+</div>
+</div>
+</div>
+<!-- AI Assistant Promo Section -->
+<section class="mt-gutter">
+<div class="glass-card rounded-2xl p-stack-lg border-primary/20 relative overflow-hidden">
+<div class="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-primary/10 rounded-full blur-[80px]"></div>
+<div class="relative z-10 max-w-2xl">
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-primary" data-icon="auto_awesome">auto_awesome</span>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-widest">Premium Feature</span>
+</div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-4">Magic Sync Integration</h2>
+<p class="font-body-md text-body-md text-on-surface-variant/80 mb-stack-md">
+                        Upgrade to our Professional Tier to enable background sync across all platforms. Our AI will automatically update your CV on each platform based on the job category it's applying to.
+                    </p>
+<button class="px-8 py-3 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary-container font-label-md text-label-md font-bold shadow-[0_20px_40px_rgba(99,102,241,0.2)] hover:shadow-[0_20px_40px_rgba(99,102,241,0.4)] transition-all active:scale-95">
+                        Upgrade Now
+                    </button>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 rounded-t-xl bg-surface/40 dark:bg-surface/40 backdrop-blur-2xl border-t border-white/10 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+<div class="flex justify-around items-center h-20 px-4 pb-safe">
+<button class="flex flex-col items-center justify-center text-on-surface-variant/70 hover:text-primary/80 transition-all active:scale-90 duration-200">
+<span class="material-symbols-outlined" data-icon="explore">explore</span>
+<span class="font-label-md text-label-md">Explore</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant/70 hover:text-primary/80 transition-all active:scale-90 duration-200">
+<span class="material-symbols-outlined" data-icon="assignment_turned_in">assignment_turned_in</span>
+<span class="font-label-md text-label-md">Applied</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant/70 hover:text-primary/80 transition-all active:scale-90 duration-200">
+<span class="material-symbols-outlined" data-icon="bookmark">bookmark</span>
+<span class="font-label-md text-label-md">Saved</span>
+</button>
+<button class="flex flex-col items-center justify-center text-primary font-bold active:scale-90 duration-200">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label-md text-label-md">Profile</span>
+</button>
+</div>
+</nav>
+<script>
+        // Simple micro-interaction for toggle states
+        const toggles = document.querySelectorAll('input[type="checkbox"]');
+        toggles.forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const card = this.closest('.glass-card');
+                if (this.checked) {
+                    card.style.borderColor = 'rgba(192, 193, 255, 0.3)';
+                } else {
+                    card.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                }
+            });
+        });
+    </script>
+</body></html>
