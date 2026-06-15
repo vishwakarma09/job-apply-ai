@@ -5,6 +5,7 @@ This directory contains the Randstad Canada integration connector for the AI Job
 ## Files
 *   `index.js`: The connector implementation, containing DOM selectors, JSON-LD metadata scraping, card selectors, and step-by-step form-filling auto-fill logic.
 *   `monitor.js`: Playwright-based test script that opens a headed browser session with the extension loaded, navigates to Randstad Canada, and monitors the application forms, capturing snapshots and JSON state maps.
+*   `turbo_apply.js`: Script to programmatically trigger the **Turbo Apply** flow automatically once the page is loaded and logged in.
 
 ## Running the Simulation
 
@@ -23,3 +24,9 @@ node browser-extension/connectors/randstad/monitor.js
 Interactive commands inside the terminal:
 *   `c` / Enter: Capture the current DOM state, field mappings, and save a screenshot.
 *   `q` / `exit`: Quit the monitor session and close Chrome.
+
+### 2. Auto-Starting Turbo Apply
+To trigger the automated application flow without manually opening the drawer and clicking the button, run the following command in a separate terminal tab while `monitor.js` is running:
+```bash
+node browser-extension/connectors/randstad/turbo_apply.js
+```
