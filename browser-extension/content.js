@@ -275,24 +275,23 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
 
     // Check if this is a sub-tab opened during an automated apply session that has redirected to a non-apply page
-    if (window.location.hostname.includes("indeed.com")) {
-      chrome.runtime.sendMessage({ action: "checkTabRole" }, (role) => {
+    chrome.runtime.sendMessage({ action: "checkTabRole" }, (role) => {
+      if (!isContextValid()) return;
+      const isMaster = role && role.isMaster;
+      const turboModeActive = role && role.turboModeActive;
+      
+      chrome.storage.local.get(["currently_applying_job_id"], (data) => {
         if (!isContextValid()) return;
-        const isMaster = role && role.isMaster;
-        const turboModeActive = role && role.turboModeActive;
-        
-        chrome.storage.local.get(["currently_applying_job_id"], (data) => {
-          if (!isContextValid()) return;
-          const activeJobId = data.currently_applying_job_id;
-          if (activeJobId) {
-            chrome.storage.local.get([`retry_apply_active_${activeJobId}`], (res) => {
-              if (!isContextValid()) return;
-              const isRetry = res[`retry_apply_active_${activeJobId}`];
-              const isAutomated = turboModeActive || isRetry;
-              
+        const activeJobId = data.currently_applying_job_id;
+        if (activeJobId) {
+          chrome.storage.local.get([`retry_apply_active_${activeJobId}`], (res) => {
+            if (!isContextValid()) return;
+            const isRetry = res[`retry_apply_active_${activeJobId}`];
+            const isAutomated = turboModeActive || isRetry;
+            
+            // Indeed specific closing behavior
+            if (window.location.hostname.includes("indeed.com")) {
               const isApplyStart = window.location.href.includes("jk=") || window.location.href.includes("applystart");
-              
-              // Only close the tab if it is NOT the master tab AND was identified as a subtab in an automated flow
               if (isAutomated && !isMaster && !turboRunning && !isApplyStart) {
                 console.log("[AI Job Apply] Sub-tab redirected away from apply flow. Closing tab.");
                 chrome.storage.local.set({
@@ -303,29 +302,27 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
                 });
                 return;
               }
-              // Otherwise proceed to normal scraper
-              continueScraperSetup(role);
-            });
-          } else {
+            }
+            
+            // Otherwise proceed to normal scraper
             continueScraperSetup(role);
-          }
-        });
+          });
+        } else {
+          continueScraperSetup(role);
+        }
       });
-    } else {
-      continueScraperSetup();
-    }
+    });
 
     function continueScraperSetup(role = null) {
       const isRetrySub = role && role.isRetrySub;
-      const isJobDetailsPage = window.location.pathname.includes("/viewjob") || window.location.pathname.includes("/jobs/view") || window.location.pathname.includes("/rc/clk") || window.location.search.includes("jk=");
-      if (isJobDetailsPage && !isSmartApply && !isProfileResume) {
+      if (isRetrySub) {
         chrome.storage.local.get(["currently_applying_job_id"], (data) => {
           if (!isContextValid()) return;
           const activeJobId = data.currently_applying_job_id;
           if (activeJobId) {
             chrome.storage.local.get([`retry_apply_active_${activeJobId}`], (res) => {
               if (!isContextValid()) return;
-              if (res[`retry_apply_active_${activeJobId}`] && isRetrySub) {
+              if (res[`retry_apply_active_${activeJobId}`]) {
                 console.log("[AI Job Apply] Detected active retry for Job ID in retry sub-tab:", activeJobId);
                 runRetryAutoApply(activeJobId);
               } else {
@@ -966,7 +963,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         }
 
         console.log("[AI Job Apply] Click Easy Apply button");
-        easyApplyBtn.click();
+        window.clickElement(easyApplyBtn);
         await sleep(1500);
 
         if (ActiveConnector.name === "Indeed") {
@@ -1251,7 +1248,11 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         });
       });
       
-      const retryJobs = allJobs.filter(j => j.status === 'needs-knowledge-graph');
+      const retryJobs = allJobs.filter(j => 
+        j.status === 'needs-knowledge-graph' && 
+        j.platform_name && 
+        j.platform_name.toLowerCase() === ActiveConnector.name.toLowerCase()
+      );
       if (retryJobs.length > 0) {
         logMessage(`Found ${retryJobs.length} jobs with status 'needs-knowledge-graph'. Retrying...`);
         for (const job of retryJobs) {
@@ -1428,7 +1429,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         }
       }
 
-      easyApplyBtn.click();
+      window.clickElement(easyApplyBtn);
       await sleep(1500);
 
       if (!isContextValid()) break;

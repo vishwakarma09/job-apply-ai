@@ -199,17 +199,6 @@ window.Connectors.LinkedIn = {
       cardElement.removeAttribute("target");
     }
 
-    // Helper to dispatch a full sequence of click events (mousedown -> mouseup -> click)
-    // This is crucial for single-page applications (like LinkedIn) that intercept mousedown/mouseup
-    // to handle routing, preventing standard browser-level redirection of anchor tags.
-    const dispatchClickEvents = (element) => {
-      if (!element) return;
-      const opts = { bubbles: true, cancelable: true, view: window };
-      element.dispatchEvent(new MouseEvent("mousedown", opts));
-      element.dispatchEvent(new MouseEvent("mouseup", opts));
-      element.click();
-    };
-
     // 2. Find a job view link specifically inside the card element (or if the card itself is the link)
     const jobLink = cardElement.querySelector("a[href*='/jobs/view/']") || 
                     (cardElement.tagName === "A" && cardElement.href.includes("/jobs/view/") ? cardElement : null);
@@ -217,14 +206,14 @@ window.Connectors.LinkedIn = {
     if (jobLink) {
       // Trigger LinkedIn's internal React router by clicking the inner text span/header/strong
       const innerClickTarget = jobLink.querySelector("span, strong, h3, h2, p") || jobLink;
-      dispatchClickEvents(innerClickTarget);
+      window.clickElement(innerClickTarget);
       return true;
     }
     
     // 3. Fallback only if no direct job link is found (try class selectors)
     const fallbackClickable = cardElement.querySelector(".job-card-list__title, .job-card-container__link") || cardElement;
     if (fallbackClickable) {
-      dispatchClickEvents(fallbackClickable);
+      window.clickElement(fallbackClickable);
       return true;
     }
 
@@ -233,6 +222,39 @@ window.Connectors.LinkedIn = {
   },
 
   getEasyApplyButton() {
+    const detailContainers = [
+      ".jobs-details",
+      ".jobs-details__main-content",
+      "#main",
+      ".jobs-search-results-billboard__content"
+    ];
+    
+    // Try to find the button inside the job details container first
+    for (const containerSel of detailContainers) {
+      const container = document.querySelector(containerSel);
+      if (container) {
+        const selectors = [
+          "button.jobs-apply-button",
+          ".jobs-apply-button button",
+          "button[class*='easy-apply']",
+          "button[aria-label*='Easy Apply']",
+          "[data-job-id] button.jobs-apply-button",
+          "button[id*='jobs-apply-button']"
+        ];
+        
+        for (const sel of selectors) {
+          const buttons = container.querySelectorAll(sel);
+          for (const btn of buttons) {
+            const text = (btn.textContent || btn.innerText || btn.getAttribute("aria-label") || "").toLowerCase();
+            if (text.includes("easy apply")) {
+              return btn;
+            }
+          }
+        }
+      }
+    }
+    
+    // Fallback to document-wide search, but explicitly exclude search filters
     const selectors = [
       "button.jobs-apply-button",
       ".jobs-apply-button button",
@@ -242,8 +264,19 @@ window.Connectors.LinkedIn = {
     ];
     
     for (const sel of selectors) {
-      const btn = document.querySelector(sel);
-      if (btn) return btn;
+      const buttons = document.querySelectorAll(sel);
+      for (const btn of buttons) {
+        // Exclude search filter buttons
+        if (btn.id && btn.id.includes("searchFilter")) continue;
+        if (btn.name && btn.name.includes("searchFilter")) continue;
+        const ariaLabel = (btn.getAttribute("aria-label") || "").toLowerCase();
+        if (ariaLabel.includes("filter")) continue;
+        
+        const text = (btn.textContent || btn.innerText || ariaLabel).toLowerCase();
+        if (text.includes("easy apply")) {
+          return btn;
+        }
+      }
     }
     return null;
   },
@@ -286,6 +319,16 @@ window.Connectors.LinkedIn = {
 
       let previousHtml = "";
 
+      let learnedAnswers = {};
+      if (profile && profile.answers_json) {
+        try {
+          learnedAnswers = typeof profile.answers_json === "string" ? JSON.parse(profile.answers_json) : profile.answers_json;
+          logMessage(`Loaded ${Object.keys(learnedAnswers).length} learned answers from profile.`);
+        } catch (e) {
+          console.warn("[AI Job Apply] Failed to parse profile answers_json:", e);
+        }
+      }
+
       while (checkRunning()) {
         const currentModal = document.querySelector(".jobs-easy-apply-modal, div[role='dialog']");
         if (!currentModal) {
@@ -313,13 +356,25 @@ window.Connectors.LinkedIn = {
         formIteration++;
         logMessage(`Filling page ${formIteration}...`);
 
-        // 1. Fill Text Inputs
-        const inputs = currentModal.querySelectorAll("input[type='text'], input[type='tel'], input:not([type])");
+        // 1. Fill Text Inputs & Textareas
+        const inputs = currentModal.querySelectorAll("input[type='text'], input[type='tel'], input:not([type]), textarea");
         inputs.forEach(input => {
-          const labelText = getLabelText(input).toLowerCase();
+          const labelText = getLabelText(input).toLowerCase().trim();
           let valueToFill = "";
 
-          if (labelText.includes("phone") || labelText.includes("mobile") || labelText.includes("number")) {
+          // Check learned answers first
+          let matchedVal = null;
+          for (const [q, a] of Object.entries(learnedAnswers)) {
+            const cleanQ = q.toLowerCase().trim();
+            if (labelText === cleanQ || labelText.includes(cleanQ) || cleanQ.includes(labelText)) {
+              matchedVal = a;
+              break;
+            }
+          }
+
+          if (matchedVal !== null && matchedVal !== undefined && String(matchedVal).trim() !== "") {
+            valueToFill = String(matchedVal).trim();
+          } else if (labelText.includes("phone") || labelText.includes("mobile") || labelText.includes("number")) {
             valueToFill = profile.phone || "+1 (555) 019-2834";
           } else if (labelText.includes("email")) {
             valueToFill = profile.email || "";
@@ -359,10 +414,22 @@ window.Connectors.LinkedIn = {
         const selects = currentModal.querySelectorAll("select");
         selects.forEach(select => {
           if (select.selectedIndex <= 0 && select.options.length > 1) {
-            const labelText = getLabelText(select).toLowerCase();
+            const labelText = getLabelText(select).toLowerCase().trim();
             let targetVal = "";
 
-            if (labelText.includes("sponsorship") || labelText.includes("sponsor")) {
+            // Check learned answers first
+            let matchedVal = null;
+            for (const [q, a] of Object.entries(learnedAnswers)) {
+              const cleanQ = q.toLowerCase().trim();
+              if (labelText === cleanQ || labelText.includes(cleanQ) || cleanQ.includes(labelText)) {
+                matchedVal = a;
+                break;
+              }
+            }
+
+            if (matchedVal !== null && matchedVal !== undefined && String(matchedVal).trim() !== "") {
+              targetVal = String(matchedVal).trim();
+            } else if (labelText.includes("sponsorship") || labelText.includes("sponsor")) {
               targetVal = profile.visa_sponsorship || "";
             } else if (labelText.includes("disability")) {
               targetVal = profile.disability_status || "";
@@ -407,17 +474,32 @@ window.Connectors.LinkedIn = {
           if (!isAnyChecked) {
             let labelText = "";
             const legend = radios[0].closest("fieldset")?.querySelector("legend");
-            if (legend) labelText = legend.innerText.toLowerCase();
+            if (legend) labelText = legend.innerText.toLowerCase().trim();
+            if (!labelText) {
+              labelText = getLabelText(radios[0]).toLowerCase().trim();
+            }
+
+            // Check learned answers first
+            let matchedVal = null;
+            for (const [q, a] of Object.entries(learnedAnswers)) {
+              const cleanQ = q.toLowerCase().trim();
+              if (labelText === cleanQ || labelText.includes(cleanQ) || cleanQ.includes(labelText)) {
+                matchedVal = a;
+                break;
+              }
+            }
 
             let targetVal = "yes";
-            if (labelText.includes("sponsorship") || labelText.includes("sponsor")) {
+            if (matchedVal !== null && matchedVal !== undefined && String(matchedVal).trim() !== "") {
+              targetVal = String(matchedVal).toLowerCase().trim();
+            } else if (labelText.includes("sponsorship") || labelText.includes("sponsor")) {
               targetVal = (profile.visa_sponsorship === "Yes") ? "yes" : "no";
             }
 
             let checkIndex = 0;
             radios.forEach((r, idx) => {
               const label = getLabelText(r).toLowerCase();
-              if (label === targetVal || label.includes(targetVal)) {
+              if (label === targetVal || label.includes(targetVal) || targetVal.includes(label)) {
                 checkIndex = idx;
               }
             });
@@ -444,9 +526,9 @@ window.Connectors.LinkedIn = {
 
         await sleep(500);
 
-        // Check for unfilled required fields in LinkedIn's modal
-        try {
-          const unfilled = Array.from(currentModal.querySelectorAll('input, select, textarea')).filter(el => {
+        // Helper to get all current unfilled required fields
+        const getUnfilledRequiredFields = () => {
+          return Array.from(currentModal.querySelectorAll('input, select, textarea')).filter(el => {
             if (el.type === 'hidden') return false;
             const isReq = el.required || el.getAttribute('aria-required') === 'true';
             if (!isReq) return false;
@@ -462,8 +544,126 @@ window.Connectors.LinkedIn = {
             }
             return !el.value.trim();
           });
-          if (unfilled.length > 0) {
-            logMessage(`Detected ${unfilled.length} unfilled required fields. Skipping job...`);
+        };
+
+        // Check for unfilled required fields in LinkedIn's modal and trigger AI Solver
+        let emptyRequiredFields = getUnfilledRequiredFields();
+        if (emptyRequiredFields.length > 0 || formIteration > 5) {
+          logMessage(`Required fields empty (${emptyRequiredFields.length}) or page complex. Invoking AI Solver...`);
+          try {
+            const chromeData = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+            const solverApi = chromeData.apiUrl || window.API_DEFAULT_URL;
+            const solverToken = chromeData.token;
+
+            if (solverToken) {
+              const headingText = currentModal.querySelector('h1, h2, h3, .artdeco-modal__title')?.innerText || "";
+              const fieldsData = Array.from(currentModal.querySelectorAll('input, select, textarea')).filter(el => el.type !== 'hidden').map(el => {
+                let label = "";
+                if (el.type === 'radio') {
+                  const legend = el.closest("fieldset")?.querySelector("legend");
+                  if (legend) label = legend.innerText.trim();
+                }
+                if (!label) {
+                  label = getLabelText(el);
+                }
+                
+                return {
+                  id: el.id || '',
+                  name: el.name || '',
+                  type: el.type || el.tagName.toLowerCase(),
+                  label: label,
+                  value: el.type === 'checkbox' || el.type === 'radio' ? (el.checked ? el.value || 'on' : '') : el.value || '',
+                  required: el.required || el.getAttribute('aria-required') === 'true'
+                };
+              });
+
+              const solveResponse = await fetchBackend(`${solverApi}/api/jobs/solve-screen`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${solverToken}`
+                },
+                body: JSON.stringify({
+                  profile: profile,
+                  url: window.location.href,
+                  title: document.title,
+                  heading: headingText,
+                  fields: fieldsData
+                })
+              });
+
+              if (solveResponse && solveResponse.action === "fill" && solveResponse.fields) {
+                logMessage("AI Solver successfully resolved fields.");
+                solveResponse.fields.forEach(f => {
+                  let el = null;
+                  if (f.id) {
+                    // Escape colon in ID selector
+                    const escapedId = f.id.replace(/:/g, '\\:');
+                    el = currentModal.querySelector(`#${escapedId}`) || document.getElementById(f.id);
+                  }
+                  if (!el && f.name) {
+                    if (f.type === "radio") {
+                      const radios = Array.from(currentModal.querySelectorAll(`input[type="radio"][name="${f.name}"]`));
+                      const targetRadio = radios.find(r => {
+                        const labelText = getLabelText(r).toLowerCase();
+                        const valText = r.value.toLowerCase();
+                        const fVal = String(f.value).toLowerCase();
+                        return valText === fVal || labelText === fVal || labelText.includes(fVal);
+                      }) || radios[0];
+                      if (targetRadio) {
+                        targetRadio.click();
+                        if (!targetRadio.checked) {
+                          targetRadio.checked = true;
+                          targetRadio.dispatchEvent(new Event("change", { bubbles: true }));
+                        }
+                      }
+                      return;
+                    }
+                    el = currentModal.querySelector(`[name="${f.name}"]`);
+                  }
+
+                  if (el && f.value !== undefined && f.value !== null) {
+                    if (el.type === "checkbox") {
+                      const isTrue = f.value === true || String(f.value).toLowerCase() === "true" || String(f.value).toLowerCase() === "yes" || String(f.value).toLowerCase() === "1";
+                      if (el.checked !== isTrue) {
+                        el.click();
+                        if (el.checked !== isTrue) {
+                          el.checked = isTrue;
+                          el.dispatchEvent(new Event("change", { bubbles: true }));
+                        }
+                      }
+                    } else if (el.type === "radio") {
+                      const radios = el.name ? Array.from(currentModal.querySelectorAll(`input[type="radio"][name="${el.name}"]`)) : [el];
+                      const targetRadio = radios.find(r => {
+                        const labelText = getLabelText(r).toLowerCase();
+                        const valText = r.value.toLowerCase();
+                        const fVal = String(f.value).toLowerCase();
+                        return valText === fVal || labelText === fVal || labelText.includes(fVal);
+                      }) || el;
+                      targetRadio.click();
+                      if (!targetRadio.checked) {
+                        targetRadio.checked = true;
+                        targetRadio.dispatchEvent(new Event("change", { bubbles: true }));
+                      }
+                    } else {
+                      el.value = f.value;
+                      el.dispatchEvent(new Event("input", { bubbles: true }));
+                      el.dispatchEvent(new Event("change", { bubbles: true }));
+                    }
+                  }
+                });
+              }
+            }
+          } catch (solverErr) {
+            console.warn("[AI Job Apply] AI Solver failed:", solverErr);
+          }
+        }
+
+        // Re-check unfilled required fields after AI Solver has run
+        try {
+          const finalUnfilled = getUnfilledRequiredFields();
+          if (finalUnfilled.length > 0) {
+            logMessage(`Detected ${finalUnfilled.length} unfilled required fields. Skipping job...`);
             const activeJobId = jobId || window.Connectors.LinkedIn.getJobId();
             if (activeJobId) {
               chrome.storage.local.set({ [`retry_outstanding_questions_${activeJobId}`]: true });
@@ -480,7 +680,25 @@ window.Connectors.LinkedIn = {
         }
 
         // 6. Find and Click Next / Review / Submit Button
-        const nextBtn = currentModal.querySelector("button.artdeco-button--primary, button[class*='primary'], footer button");
+        let nextBtn = currentModal.querySelector("button.artdeco-button--primary");
+        if (!nextBtn) {
+          const buttons = Array.from(currentModal.querySelectorAll("button, footer button"));
+          nextBtn = buttons.find(btn => {
+            const text = btn.innerText.toLowerCase();
+            const aria = (btn.getAttribute("aria-label") || "").toLowerCase();
+            const isBack = text.includes("back") || text.includes("previous") || aria.includes("back") || aria.includes("previous");
+            if (isBack) return false;
+            return btn.classList.contains("artdeco-button--primary") || 
+                   btn.type === "submit" || 
+                   text.includes("next") || 
+                   text.includes("review") || 
+                   text.includes("submit") || 
+                   text.includes("continue");
+          });
+        }
+        if (!nextBtn) {
+          nextBtn = currentModal.querySelector("button.artdeco-button--primary, button[class*='primary'], footer button");
+        }
         if (nextBtn) {
           const btnText = nextBtn.innerText.toLowerCase();
           

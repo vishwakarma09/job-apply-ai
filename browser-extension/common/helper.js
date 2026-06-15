@@ -67,6 +67,14 @@ window.debugRemoteLog = function(message) {
   }
 };
 
+window.clickElement = (element) => {
+  if (!element) return;
+  const opts = { bubbles: true, cancelable: true, view: window };
+  element.dispatchEvent(new MouseEvent("mousedown", opts));
+  element.dispatchEvent(new MouseEvent("mouseup", opts));
+  element.click();
+};
+
 window.sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper function to extract text label associated with an input
