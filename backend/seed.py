@@ -3,6 +3,8 @@ import json
 from app.database import SessionLocal, engine, Base
 from app.auth import get_password_hash
 from app import models
+from app.services.embedding_service import get_embedding
+from app.routes.profiles import sync_profile_to_knowledgebase
 
 # Ensure tables are created
 Base.metadata.create_all(bind=engine)
@@ -113,17 +115,30 @@ try:
         user_id=test_user.id,
         title="Senior Full Stack Developer",
         is_active=True,
-        resume_id=resume.id
+        resume_id=resume.id,
+        phone="647-395-0215",
+        email="kkumar.sandeep89@gmail.com",
+        nationality="Canadian Citizen",
+        work_authorization="Authorized to work in Canada and India. Eligible for TN Visa for USA.",
+        visa_sponsorship="Requires TN Visa support for USA. No sponsorship needed for Canada or India."
     )
     profile2 = models.JobProfile(
         user_id=test_user.id,
         title="Full Stack Developer",
         is_active=False,
-        resume_id=resume.id
+        resume_id=resume.id,
+        phone="647-395-0215",
+        email="kkumar.sandeep89@gmail.com",
+        nationality="Canadian Citizen",
+        work_authorization="Authorized to work in Canada and India. Eligible for TN Visa for USA.",
+        visa_sponsorship="Requires TN Visa support for USA. No sponsorship needed for Canada or India."
     )
     db.add(profile1)
     db.add(profile2)
     db.flush()
+    
+    # Sync profiles to knowledge base to automatically generate vector DB records
+    sync_profile_to_knowledgebase(db, profile1)
     
     # 6. Seed Connectors
     connector1 = models.Connector(
@@ -259,6 +274,111 @@ try:
     )
     db.add(job3)
     
+    # 8. Seed User Knowledgebase (Vector Database)
+    knowledgebase_questions = [
+        # Job preference questions
+        {
+            "question": "Job preference",
+            "answer": "Full-time"
+        },
+        {
+            "question": "Are you looking for full-time or part-time work?",
+            "answer": "Full-time"
+        },
+        {
+            "question": "What is your desired employment type?",
+            "answer": "Full-time"
+        },
+        {
+            "question": "What is your job preference?",
+            "answer": "Full-time"
+        },
+        {
+            "question": "Preferred job type",
+            "answer": "Full-time"
+        },
+        # Location questions
+        {
+            "question": "Location",
+            "answer": "Toronto, Ontario, Canada"
+        },
+        {
+            "question": "Where are you located?",
+            "answer": "Toronto, Ontario, Canada"
+        },
+        {
+            "question": "What is your current location?",
+            "answer": "Toronto, Ontario, Canada"
+        },
+        {
+            "question": "Desired job location",
+            "answer": "Toronto"
+        },
+        # Work authorization questions
+        {
+            "question": "Work authorization status",
+            "answer": "Authorized to work in Canada and India."
+        },
+        {
+            "question": "In which countries are you authorized to work?",
+            "answer": "Authorized to work in Canada and India."
+        },
+        {
+            "question": "Are you legally authorized to work in Canada?",
+            "answer": "Yes, I am authorized to work in Canada."
+        },
+        {
+            "question": "Are you legally authorized to work in India?",
+            "answer": "Yes, I am authorized to work in India."
+        },
+        # USA work and TN Visa questions
+        {
+            "question": "Do you require sponsorship to work in the USA?",
+            "answer": "I require sponsorship/TN visa support to work in the USA, but I am eligible for a TN Visa."
+        },
+        {
+            "question": "Are you authorized to work in the USA?",
+            "answer": "I require a TN Visa to work in the USA, which I am eligible for as a Canadian citizen."
+        },
+        {
+            "question": "Do you need a TN Visa for USA work?",
+            "answer": "Yes, I require a TN Visa to work in the USA."
+        },
+        {
+            "question": "What is your USA work authorization status?",
+            "answer": "I require a TN Visa to work in the USA."
+        },
+        {
+            "question": "Will you now or in the future require visa sponsorship to work in the US?",
+            "answer": "Yes, I require support for a TN Visa to work in the USA."
+        },
+        {
+            "question": "Eligible for TN Visa",
+            "answer": "Yes, I am eligible for a TN Visa to work in the USA."
+        }
+    ]
+
+    for kb_data in knowledgebase_questions:
+        # Check if it already exists to prevent duplicate seeding
+        existing_kb = db.query(models.UserKnowledgebase).filter(
+            models.UserKnowledgebase.user_id == test_user.id,
+            models.UserKnowledgebase.question == kb_data["question"]
+        ).first()
+        
+        embedding = get_embedding(kb_data["question"])
+        
+        if existing_kb:
+            existing_kb.answer = kb_data["answer"]
+            existing_kb.question_embedding = embedding
+        else:
+            new_kb = models.UserKnowledgebase(
+                user_id=test_user.id,
+                question=kb_data["question"],
+                answer=kb_data["answer"],
+                question_embedding=embedding
+            )
+            db.add(new_kb)
+            
     db.commit()
     print("Database seeding completed successfully.")
 except Exception as e:
