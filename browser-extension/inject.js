@@ -7,13 +7,33 @@
   // Listen for clicks requested by content script
   window.addEventListener("AI_JOB_APPLY_TRIGGER_CLICK", (e) => {
     if (e.detail && e.detail.targetId) {
-      const el = document.querySelector(`[data-ai-click-target="${e.detail.targetId}"]`);
+      let el = document.querySelector(`[data-ai-click-target="${e.detail.targetId}"]`);
+      let targetWindow = window;
+      if (!el) {
+        const iframes = document.querySelectorAll("iframe");
+        for (const iframe of iframes) {
+          try {
+            if (iframe.contentDocument) {
+              el = iframe.contentDocument.querySelector(`[data-ai-click-target="${e.detail.targetId}"]`);
+              if (el) {
+                targetWindow = iframe.contentWindow;
+                break;
+              }
+            }
+          } catch (err) {
+            // Ignore cross-origin
+          }
+        }
+      }
       if (el) {
         console.log("[AI Job Apply Inject] Clicking element in MAIN world:", el);
-        const opts = { bubbles: true, cancelable: true, view: window };
+        const opts = { bubbles: true, cancelable: true, view: targetWindow };
         el.dispatchEvent(new MouseEvent("mousedown", opts));
         el.dispatchEvent(new MouseEvent("mouseup", opts));
         el.dispatchEvent(new MouseEvent("click", opts));
+        if (typeof el.click === "function") {
+          el.click();
+        }
       }
     }
   });

@@ -5,6 +5,47 @@ window.Connectors = window.Connectors || {};
 
 window.Connectors.LinkedIn = {
   name: "LinkedIn",
+
+  // Helper to query element from document or same-origin iframes
+  querySelector(selector, parent = document) {
+    let el = parent.querySelector(selector);
+    if (el) return el;
+
+    if (parent === document) {
+      const iframes = document.querySelectorAll("iframe");
+      for (const iframe of iframes) {
+        try {
+          if (iframe.contentDocument) {
+            el = iframe.contentDocument.querySelector(selector);
+            if (el) return el;
+          }
+        } catch (e) {
+          // Ignore cross-origin
+        }
+      }
+    }
+    return null;
+  },
+
+  // Helper to query all elements from document and same-origin iframes
+  querySelectorAll(selector, parent = document) {
+    const list = [];
+    parent.querySelectorAll(selector).forEach(el => list.push(el));
+
+    if (parent === document) {
+      const iframes = document.querySelectorAll("iframe");
+      for (const iframe of iframes) {
+        try {
+          if (iframe.contentDocument) {
+            iframe.contentDocument.querySelectorAll(selector).forEach(el => list.push(el));
+          }
+        } catch (e) {
+          // Ignore cross-origin
+        }
+      }
+    }
+    return list;
+  },
   
   // Selectors for DOM extraction
   selectors: {
@@ -56,7 +97,7 @@ window.Connectors.LinkedIn = {
   scrapeDetails(jobId) {
     let title = "Unknown Position";
     for (const sel of this.selectors.title) {
-      const el = document.querySelector(sel);
+      const el = this.querySelector(sel);
       if (el && el.innerText.trim()) {
         title = el.innerText.trim();
         break;
@@ -65,7 +106,7 @@ window.Connectors.LinkedIn = {
 
     let company = "Unknown Company";
     for (const sel of this.selectors.company) {
-      const el = document.querySelector(sel);
+      const el = this.querySelector(sel);
       if (el && el.innerText.trim()) {
         company = el.innerText.trim().split("\n")[0].trim();
         break;
@@ -74,7 +115,7 @@ window.Connectors.LinkedIn = {
 
     let location = "Unknown Location";
     for (const sel of this.selectors.location) {
-      const el = document.querySelector(sel);
+      const el = this.querySelector(sel);
       if (el && el.innerText.trim()) {
         let text = el.innerText.trim().replace(/\n/g, "").replace(/\s+/g, " ");
         if (text.includes("·")) {
@@ -88,7 +129,7 @@ window.Connectors.LinkedIn = {
 
     let description = "";
     for (const sel of this.selectors.description) {
-      const el = document.querySelector(sel);
+      const el = this.querySelector(sel);
       if (el && el.innerText.trim()) {
         description = el.innerText.trim();
         break;
@@ -229,25 +270,32 @@ window.Connectors.LinkedIn = {
       ".jobs-search-results-billboard__content"
     ];
     
-    // Try to find the button inside the job details container first
+    // Try to find the button/link inside the job details container first
     for (const containerSel of detailContainers) {
-      const container = document.querySelector(containerSel);
+      const container = this.querySelector(containerSel);
       if (container) {
         const selectors = [
           "button.jobs-apply-button",
+          "a.jobs-apply-button",
           ".jobs-apply-button button",
+          ".jobs-apply-button a",
           "button[class*='easy-apply']",
+          "a[class*='easy-apply']",
           "button[aria-label*='Easy Apply']",
+          "a[aria-label*='Easy Apply']",
           "[data-job-id] button.jobs-apply-button",
-          "button[id*='jobs-apply-button']"
+          "[data-job-id] a.jobs-apply-button",
+          "button[id*='jobs-apply-button']",
+          "a[id*='jobs-apply-button']",
+          "a[href*='/apply/']"
         ];
         
         for (const sel of selectors) {
-          const buttons = container.querySelectorAll(sel);
-          for (const btn of buttons) {
-            const text = (btn.textContent || btn.innerText || btn.getAttribute("aria-label") || "").toLowerCase();
-            if (text.includes("easy apply")) {
-              return btn;
+          const elements = this.querySelectorAll(sel, container);
+          for (const el of elements) {
+            const text = (el.textContent || el.innerText || el.getAttribute("aria-label") || "").toLowerCase();
+            if (text.includes("easy apply") || (el.tagName === "A" && el.href && el.href.includes("/apply/"))) {
+              return el;
             }
           }
         }
@@ -257,24 +305,30 @@ window.Connectors.LinkedIn = {
     // Fallback to document-wide search, but explicitly exclude search filters
     const selectors = [
       "button.jobs-apply-button",
+      "a.jobs-apply-button",
       ".jobs-apply-button button",
+      ".jobs-apply-button a",
       "button[class*='easy-apply']",
+      "a[class*='easy-apply']",
       "button[aria-label*='Easy Apply']",
-      "[data-job-id] button.jobs-apply-button"
+      "a[aria-label*='Easy Apply']",
+      "[data-job-id] button.jobs-apply-button",
+      "[data-job-id] a.jobs-apply-button",
+      "a[href*='/apply/']"
     ];
     
     for (const sel of selectors) {
-      const buttons = document.querySelectorAll(sel);
-      for (const btn of buttons) {
+      const elements = this.querySelectorAll(sel);
+      for (const el of elements) {
         // Exclude search filter buttons
-        if (btn.id && btn.id.includes("searchFilter")) continue;
-        if (btn.name && btn.name.includes("searchFilter")) continue;
-        const ariaLabel = (btn.getAttribute("aria-label") || "").toLowerCase();
+        if (el.id && el.id.includes("searchFilter")) continue;
+        if (el.name && el.name.includes("searchFilter")) continue;
+        const ariaLabel = (el.getAttribute("aria-label") || "").toLowerCase();
         if (ariaLabel.includes("filter")) continue;
         
-        const text = (btn.textContent || btn.innerText || ariaLabel).toLowerCase();
-        if (text.includes("easy apply")) {
-          return btn;
+        const text = (el.textContent || el.innerText || ariaLabel).toLowerCase();
+        if (text.includes("easy apply") || (el.tagName === "A" && el.href && el.href.includes("/apply/"))) {
+          return el;
         }
       }
     }
@@ -282,7 +336,7 @@ window.Connectors.LinkedIn = {
   },
 
   isAlreadyApplied() {
-    const elements = Array.from(document.querySelectorAll('button, span, div, p, a'));
+    const elements = Array.from(this.querySelectorAll('button, span, div, p, a'));
     for (const el of elements) {
       if (el.children.length === 0) {
         const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
@@ -303,7 +357,7 @@ window.Connectors.LinkedIn = {
       // Poll for up to 6 seconds (12 * 500ms)
       for (let i = 0; i < 12; i++) {
         if (!checkRunning()) return false;
-        modal = document.querySelector(".jobs-easy-apply-modal, div[role='dialog'], [class*='easy-apply-modal']");
+        modal = window.Connectors.LinkedIn.querySelector(".jobs-easy-apply-modal, div[role='dialog'], [class*='easy-apply-modal']");
         if (modal) break;
         await sleep(500);
       }
@@ -330,7 +384,7 @@ window.Connectors.LinkedIn = {
       }
 
       while (checkRunning()) {
-        const currentModal = document.querySelector(".jobs-easy-apply-modal, div[role='dialog']");
+        const currentModal = window.Connectors.LinkedIn.querySelector(".jobs-easy-apply-modal, div[role='dialog']");
         if (!currentModal) {
           logMessage("Easy Apply modal closed. Form finished.");
           return true;
@@ -586,7 +640,7 @@ window.Connectors.LinkedIn = {
                 body: JSON.stringify({
                   profile: profile,
                   url: window.location.href,
-                  title: document.title,
+                  title: currentModal.ownerDocument.title,
                   heading: headingText,
                   fields: fieldsData
                 })
@@ -599,7 +653,7 @@ window.Connectors.LinkedIn = {
                   if (f.id) {
                     // Escape colon in ID selector
                     const escapedId = f.id.replace(/:/g, '\\:');
-                    el = currentModal.querySelector(`#${escapedId}`) || document.getElementById(f.id);
+                    el = currentModal.querySelector(`#${escapedId}`) || currentModal.ownerDocument.getElementById(f.id);
                   }
                   if (!el && f.name) {
                     if (f.type === "radio") {
@@ -721,7 +775,7 @@ window.Connectors.LinkedIn = {
             nextBtn.click();
             await sleep(1500);
             
-            const dismissBtn = document.querySelector("button[aria-label='Dismiss'], button[aria-label='Close'], .artdeco-modal__dismiss");
+            const dismissBtn = currentModal.ownerDocument.querySelector("button[aria-label='Dismiss'], button[aria-label='Close'], .artdeco-modal__dismiss");
             if (dismissBtn) {
               dismissBtn.click();
             }

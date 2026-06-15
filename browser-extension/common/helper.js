@@ -101,8 +101,9 @@ window.sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper function to extract text label associated with an input
 window.getLabelText = (inputEl) => {
+  const doc = inputEl.ownerDocument || document;
   if (inputEl.id) {
-    const label = document.querySelector(`label[for="${inputEl.id}"]`);
+    const label = doc.querySelector(`label[for="${inputEl.id}"]`);
     if (label) return label.innerText.trim();
   }
   const parentLabel = inputEl.closest("label");
@@ -110,7 +111,7 @@ window.getLabelText = (inputEl) => {
   
   const ariaLabeledby = inputEl.getAttribute("aria-labelledby");
   if (ariaLabeledby) {
-    const label = document.getElementById(ariaLabeledby) || document.querySelector(`#${ariaLabeledby}`);
+    const label = doc.getElementById(ariaLabeledby) || doc.querySelector(`#${ariaLabeledby}`);
     if (label) return label.innerText.trim();
   }
 
