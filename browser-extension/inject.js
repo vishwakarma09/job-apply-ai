@@ -34,4 +34,43 @@
     }
     return originalOpen.apply(this, arguments);
   };
+
+  window.addEventListener("AI_JOB_APPLY_SET_TYPEAHEAD_LOCATION", (e) => {
+    if (e.detail && e.detail.location) {
+      const location = e.detail.location;
+      const $ = window.jQuery || window.$;
+      if ($) {
+        console.log("[AI Job Apply Inject] Setting typeahead location to:", location);
+        const $loc = $("#locationstring");
+        if ($loc.length && typeof $loc.typeahead === "function") {
+          $loc.typeahead("val", location);
+          $loc.typeahead("open");
+          
+          setTimeout(() => {
+            const menu = $loc.parent().find(".tt-menu");
+            const suggestions = menu.find(".tt-suggestion");
+            let targetSuggestion = null;
+            
+            for (let i = 0; i < suggestions.length; i++) {
+              const text = $(suggestions[i]).text().toLowerCase();
+              if (!text.includes("no suggestion")) {
+                targetSuggestion = $(suggestions[i]);
+                break;
+              }
+            }
+            
+            if (targetSuggestion && targetSuggestion.length) {
+              console.log("[AI Job Apply Inject] Clicking typeahead suggestion:", targetSuggestion.text());
+              targetSuggestion.click();
+              window.dispatchEvent(new CustomEvent("AI_JOB_APPLY_TYPEAHEAD_SUCCESS", {
+                detail: { selectedText: targetSuggestion.text() }
+              }));
+            } else {
+              console.warn("[AI Job Apply Inject] No valid typeahead suggestions found.");
+            }
+          }, 1500);
+        }
+      }
+    }
+  });
 })();

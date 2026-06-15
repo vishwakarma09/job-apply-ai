@@ -51,3 +51,4 @@ backend/uploads/resumes/*
 browser-extension/temp_chrome_profile/*
 browser-extension/connectors/randstad/steps_captured/*
 browser-extension/connectors/careerbeacon/steps_captured/*
+browser-extension/connectors/jobbank/steps_captured/*

@@ -75,8 +75,8 @@ setTimeout(async () => {
             try {
               console.log("[AutoLogin] Localhost dashboard page detected. Attempting auto-login...");
               await newPage.waitForSelector('input[type="email"], input[name="email"]', { timeout: 10000 });
-              await newPage.fill('input[type="email"], input[name="email"]', 'admin@aijobapply.com');
-              await newPage.fill('input[type="password"], input[name="password"]', 'Password@123');
+              await newPage.fill('input[type="email"], input[name="email"]', 'kkumar.sandeep89@gmail.com');
+              await newPage.fill('input[type="password"], input[name="password"]', 'password');
               await newPage.click('button[type="submit"]');
               console.log("[AutoLogin] Auto-login form submitted successfully!");
             } catch (e) {
@@ -94,17 +94,17 @@ setTimeout(async () => {
       });
     });
 
-    console.log("Navigating to http://localhost:5173/ to check/sync credentials...");
+    console.log("Navigating to http://localhost:5173/login to check/sync credentials...");
     try {
-      await page.goto('http://localhost:5173/', { waitUntil: 'domcontentloaded' });
+      await page.goto('http://localhost:5173/login', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1000);
       
       const emailInput = page.locator('input[type="email"], input[name="email"]');
       const isLoginVisible = await emailInput.isVisible({ timeout: 4000 }).catch(() => false);
       if (isLoginVisible) {
-        console.log("[AutoLogin] Form visible. Logging in as admin@aijobapply.com...");
-        await emailInput.fill('admin@aijobapply.com');
-        await page.fill('input[type="password"], input[name="password"]', 'Password@123');
+        console.log("[AutoLogin] Form visible. Logging in as kkumar.sandeep89@gmail.com...");
+        await emailInput.fill('kkumar.sandeep89@gmail.com');
+        await page.fill('input[type="password"], input[name="password"]', 'password');
         await page.click('button[type="submit"]');
         await page.waitForTimeout(3000);
       } else {

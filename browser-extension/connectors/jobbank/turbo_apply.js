@@ -8,14 +8,33 @@ const path = require('path');
     const context = browser.contexts()[0];
     const pages = context.pages();
     
-    // 1. Find and refresh localhost dashboard to sync token
-    const localhostPage = pages.find(p => p.url().includes("localhost:5173") || p.url().includes("127.0.0.1:5173"));
-    if (localhostPage) {
-      console.log("Refreshing localhost dashboard to synchronize extension token...");
-      await localhostPage.reload({ waitUntil: 'domcontentloaded' });
-      await localhostPage.waitForTimeout(3000);
-    } else {
-      console.warn("Localhost dashboard tab not found in browser context!");
+    // 1. Find or create localhost dashboard tab and ensure we are logged in as the correct user
+    let localhostPage = pages.find(p => p.url().includes("localhost:5173") || p.url().includes("127.0.0.1:5173"));
+    if (!localhostPage) {
+      console.log("Localhost page not found. Creating new tab...");
+      localhostPage = await context.newPage();
+    }
+
+    console.log("Navigating to http://localhost:5173/login...");
+    await localhostPage.goto('http://localhost:5173/login', { waitUntil: 'domcontentloaded' });
+    await localhostPage.evaluate(() => localStorage.clear()).catch(() => {});
+    await localhostPage.goto('http://localhost:5173/login', { waitUntil: 'domcontentloaded' });
+    await localhostPage.waitForTimeout(2000);
+
+    try {
+      const emailInput = localhostPage.locator('input[type="email"], input[name="email"]');
+      const isLoginVisible = await emailInput.isVisible({ timeout: 4000 }).catch(() => false);
+      if (isLoginVisible) {
+        console.log("Logging in to localhost dashboard as kkumar.sandeep89@gmail.com...");
+        await emailInput.fill('kkumar.sandeep89@gmail.com');
+        await localhostPage.fill('input[type="password"], input[name="password"]', 'password');
+        await localhostPage.click('button[type="submit"]');
+        await localhostPage.waitForTimeout(4000);
+      } else {
+        console.log("Dashboard loaded after clearing storage.");
+      }
+    } catch (e) {
+      console.warn("Failed/skipped auto-login checks on dashboard:", e.message);
     }
 
     // 2. Find and refresh Job Bank tab
@@ -24,6 +43,12 @@ const path = require('path');
       console.error("No active Job Bank tab found!");
       return;
     }
+
+    console.log("Clearing any previous active Turbo Mode states in the extension...");
+    await targetPage.evaluate(() => {
+      window.dispatchEvent(new CustomEvent("AI_JOB_APPLY_CLEAR_TURBO"));
+    }).catch(() => {});
+    await targetPage.waitForTimeout(1000);
 
     console.log(`Refreshing Job Bank tab: ${targetPage.url()}`);
     await targetPage.reload({ waitUntil: 'domcontentloaded' });

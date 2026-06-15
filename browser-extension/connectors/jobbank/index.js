@@ -59,9 +59,9 @@ window.Connectors.JobBank = {
     const jobId = urlParams.get("job_id") || urlParams.get("jobId") || urlParams.get("id");
     if (jobId) return jobId;
 
-    // Pattern: /jobposting/(\d+)
-    const match = url.match(/\/jobposting\/(\d+)/) || url.match(/\/jobposting\/([a-zA-Z0-9]+)/);
-    if (match) return match[1];
+    // Pattern: /jobposting/(\d+) or /directapply/(\d+)
+    const match = url.match(/\/(jobposting|directapply)\/(\d+)/) || url.match(/\/(jobposting|directapply)\/([a-zA-Z0-9]+)/);
+    if (match) return match[2];
 
     return null;
   },
@@ -247,27 +247,13 @@ window.Connectors.JobBank = {
   // Find and return the apply button
   getEasyApplyButton() {
     const selectors = [
-      "#showapplybtn",
-      "button[id*='apply']",
-      "a[id*='apply']",
-      "[class*='apply'] button",
-      "[class*='apply'] a",
-      "button.apply-button",
-      "button.btn-apply",
-      ".btn-apply"
+      "#btn-direct-apply",
+      "button[id*='applyresumesharing']",
+      "a[id*='applyresumesharing']"
     ];
     for (const sel of selectors) {
       const btn = document.querySelector(sel);
       if (btn && window.isElementVisible(btn)) return btn;
-    }
-    
-    // Find globally by text content
-    const buttons = Array.from(document.querySelectorAll('button, a, input[type="button"]'));
-    for (const btn of buttons) {
-      const text = (btn.textContent || btn.innerText || btn.value || "").toLowerCase().trim();
-      if (text === 'apply' || text === 'apply now' || text === 'show how to apply' || text.includes('apply now') || text === 'quick apply' || text === 'submit application' || text === 'candidater' || text.includes('apply for this job')) {
-        if (window.isElementVisible(btn)) return btn;
-      }
     }
     return null;
   },
@@ -307,11 +293,44 @@ window.Connectors.JobBank = {
         }
       }
 
+      // Check if we need to click the direct apply / resume sharing button first
+      const directApplyBtn = document.querySelector("#btn-direct-apply, button[id*='applyresumesharing'], a[id*='applyresumesharing'], button[name*='applyresumesharing'], a[name*='applyresumesharing']");
+      if (directApplyBtn && window.isElementVisible(directApplyBtn)) {
+        logMessage("Direct apply (Resume Sharing) button detected! Clicking to open application flow...");
+        window.clickElement(directApplyBtn);
+        
+        let waitCount = 0;
+        let navigated = false;
+        while (waitCount < 10 && checkRunning()) {
+          await sleep(1000);
+          waitCount++;
+          
+          const isDirectApplyUrl = window.location.href.includes("/directapply") || window.location.href.includes("applyresumesharing");
+          const applyForm = isDirectApplyUrl ? document.querySelector("#applyresumesharing, form:not(#jobsearchform):not(#jobSearchResultsJobSearchForm):not(#reportProblemJobPosting):not(#favouriteaction):not(#markappliedaction):not(#externallinkactivity):not([action*='/jobsearch/jobsearch']):not([action*='/jobsearch/search']):not(.dept-nav):not([name='cse-search-box'])") : null;
+          if (applyForm || window.location.href.includes("/apply") || window.location.href.includes("applyresumesharing")) {
+            navigated = true;
+            logMessage("Successfully navigated to Job Bank direct application form.");
+            break;
+          }
+        }
+        if (!navigated) {
+          logMessage("Failed to navigate to Job Bank application form. Aborting...");
+          return false;
+        }
+      } else {
+        // If we are on the posting page and no direct apply button is present, it's not an Easy Apply job
+        const currentUrl = window.location.href;
+        if (!currentUrl.includes("/apply") && !currentUrl.includes("applyresumesharing") && !currentUrl.includes("/directapply")) {
+          logMessage("This job posting does not support direct Resume Sharing on Job Bank. Skipping...");
+          return false;
+        }
+      }
+
       let formIteration = 0;
       let previousHtml = "";
 
       while (checkRunning()) {
-        const form = document.querySelector("form, div[role='dialog'] form, .apply-form");
+        const form = document.querySelector("#applyresumesharing, form:not(#jobsearchform):not(#jobSearchResultsJobSearchForm):not(#reportProblemJobPosting):not(#favouriteaction):not(#markappliedaction):not(#externallinkactivity):not([action*='/jobsearch/jobsearch']):not([action*='/jobsearch/search']):not(.dept-nav):not([name='cse-search-box'])");
         if (!form) {
           logMessage("Form element not detected on the page. Waiting for modal/page...");
           await sleep(1500);
@@ -504,7 +523,7 @@ window.Connectors.JobBank = {
         await sleep(1000);
 
         // Click next / continue / submit button
-        const continueBtn = Array.from(form.querySelectorAll("button, input[type='submit']")).find(el => {
+        const continueBtn = Array.from(form.querySelectorAll("button, input[type='submit'], a")).find(el => {
           const text = (el.innerText || el.textContent || el.value || "").toLowerCase();
           return text.includes("continue") || text.includes("next") || text.includes("submit") || text.includes("apply") || text.includes("candidater");
         });
