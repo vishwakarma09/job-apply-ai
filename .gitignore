@@ -46,3 +46,7 @@ backend/uploads/resumes/*
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Browser Extension temp profile and simulation captures
+browser-extension/temp_chrome_profile/*
+browser-extension/connectors/randstad/steps_captured/*
