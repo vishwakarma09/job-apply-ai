@@ -27,7 +27,8 @@
     "https://*.glassdoor.com/*",
     "https://*.ziprecruiter.com/*",
     "https://*.randstad.ca/*",
-    "https://*.jobbank.gc.ca/*"
+    "https://*.jobbank.gc.ca/*",
+    "https://*.careerbeacon.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -43,7 +44,8 @@
         "https://*.glassdoor.com/*",
         "https://*.ziprecruiter.com/*",
         "https://*.randstad.ca/*",
-        "https://*.jobbank.gc.ca/*"
+        "https://*.jobbank.gc.ca/*",
+        "https://*.careerbeacon.com/*"
       ],
       "js": [
         "common/constants.js",
@@ -55,6 +57,7 @@
         "connectors/ziprecruiter/index.js",
         "connectors/randstad/index.js",
         "connectors/jobbank/index.js",
+        "connectors/careerbeacon/index.js",
         "content.js"
       ],
       "run_at": "document_idle"
@@ -68,7 +71,8 @@
         "https://*.glassdoor.com/*",
         "https://*.ziprecruiter.com/*",
         "https://*.randstad.ca/*",
-        "https://*.jobbank.gc.ca/*"
+        "https://*.jobbank.gc.ca/*",
+        "https://*.careerbeacon.com/*"
       ],
       "js": [
         "inject.js"

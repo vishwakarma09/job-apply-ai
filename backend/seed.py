@@ -170,6 +170,12 @@ try:
         credentials_json=None,
         status="Not Connected"
     )
+    connector8 = models.Connector(
+        user_id=test_user.id,
+        platform_name="CareerBeacon",
+        credentials_json=None,
+        status="Not Connected"
+    )
     db.add(connector1)
     db.add(connector2)
     db.add(connector3)
@@ -177,6 +183,7 @@ try:
     db.add(connector5)
     db.add(connector6)
     db.add(connector7)
+    db.add(connector8)
     db.flush()
     
     # 7. Seed Applied Jobs & Conversations

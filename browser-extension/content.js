@@ -6,7 +6,7 @@ let ActiveConnector = null;
 // Immediate evaluation log for debugging smartapply tab loading
 debugRemoteLog("Script evaluated on: " + window.location.href);
 
-if (window.location.hostname.includes("indeed.com") || window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com") || window.location.hostname.includes("ziprecruiter.com") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca")) {
+if (window.location.hostname.includes("indeed.com") || window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com") || window.location.hostname.includes("ziprecruiter.com") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com")) {
   // ActiveConnector is initialized in main widget engine block
   window.addEventListener("AI_JOB_APPLY_INTERCEPTED_OPEN", (event) => {
     const { url } = event.detail;
@@ -148,7 +148,7 @@ if (window.location.hostname === "localhost" || window.location.hostname === "12
 // ==========================================
 // 3. MAIN WIDGET ENGINE & AUTO-APPLY LOOP
 // ==========================================
-if (window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("indeed.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com") || window.location.hostname.includes("ziprecruiter.com") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca")) {
+if (window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("indeed.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com") || window.location.hostname.includes("ziprecruiter.com") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com")) {
   if (window.location.hostname.includes("indeed.com")) {
     ActiveConnector = Connectors.Indeed;
   } else if (window.location.hostname.includes("linkedin.com")) {
@@ -163,6 +163,8 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     ActiveConnector = Connectors.Randstad;
   } else if (window.location.hostname.includes("jobbank.gc.ca")) {
     ActiveConnector = Connectors.JobBank;
+  } else if (window.location.hostname.includes("careerbeacon.com")) {
+    ActiveConnector = Connectors.CareerBeacon;
   }
   let activeJobId = null;
   let shadowRoot = null;
@@ -260,6 +262,26 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         if (state && state.active) {
           console.log("[AI Job Apply] Resuming JobBank Turbo Mode...", state);
           resumeJobBankTurboMode(state);
+          return;
+        }
+        continueScraperSetup();
+      });
+      return;
+    }
+
+    if (window.location.hostname.includes("careerbeacon.com")) {
+      chrome.storage.local.get(["careerbeacon_turbo_state", "careerbeacon_search_state"], (res) => {
+        if (!isContextValid()) return;
+        const searchState = res.careerbeacon_search_state;
+        if (searchState && searchState.active) {
+          console.log("[AI Job Apply] Resuming CareerBeacon Search Automation...", searchState);
+          handleCareerBeaconSearchAutomation(searchState);
+          return;
+        }
+        const state = res.careerbeacon_turbo_state;
+        if (state && state.active) {
+          console.log("[AI Job Apply] Resuming CareerBeacon Turbo Mode...", state);
+          resumeCareerBeaconTurboMode(state);
           return;
         }
         continueScraperSetup();
@@ -411,9 +433,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
 
     function startRegularScraper() {
-      if (window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca")) {
+      if (window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com")) {
         if (!shadowRoot) {
-          activeJobId = ActiveConnector.getJobId() || (window.location.hostname.includes("greenhouse.io") ? "greenhouse-dashboard" : (window.location.hostname.includes("randstad.ca") ? "randstad-dashboard" : "jobbank-dashboard"));
+          activeJobId = ActiveConnector.getJobId() || (window.location.hostname.includes("greenhouse.io") ? "greenhouse-dashboard" : (window.location.hostname.includes("randstad.ca") ? "randstad-dashboard" : (window.location.hostname.includes("careerbeacon.com") ? "careerbeacon-dashboard" : "jobbank-dashboard")));
           scrapeAndShowWidget();
         }
       }
@@ -442,8 +464,8 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
             if (!isContextValid()) return;
             scrapeAndShowWidget();
           }, 1200);
-        } else if (!jobId && (window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca")) && !shadowRoot) {
-          activeJobId = window.location.hostname.includes("greenhouse.io") ? "greenhouse-dashboard" : (window.location.hostname.includes("randstad.ca") ? "randstad-dashboard" : "jobbank-dashboard");
+        } else if (!jobId && (window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com")) && !shadowRoot) {
+          activeJobId = window.location.hostname.includes("greenhouse.io") ? "greenhouse-dashboard" : (window.location.hostname.includes("randstad.ca") ? "randstad-dashboard" : (window.location.hostname.includes("careerbeacon.com") ? "careerbeacon-dashboard" : "jobbank-dashboard"));
           scrapeAndShowWidget();
         }
       }, 1500);
@@ -1865,6 +1887,369 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     window.location.href = nextUrl;
   };
 
+  const findSearchJobsBtn = () => {
+    const elements = Array.from(document.querySelectorAll('a, button, span'));
+    for (const el of elements) {
+      const text = (el.textContent || el.innerText || "").toLowerCase().trim();
+      if (text === "search jobs" || text === "search" || text.includes("search jobs")) {
+        const clickable = el.closest('a, button') || el;
+        if (window.isElementVisible(clickable)) {
+          return clickable;
+        }
+      }
+    }
+    const anchors = Array.from(document.querySelectorAll('a[href*="/search"], a[href*="/rechercher"]'));
+    for (const a of anchors) {
+      if (window.isElementVisible(a)) {
+        return a;
+      }
+    }
+    return null;
+  };
+
+  const extractLocationFromResume = (resumeText) => {
+    if (!resumeText) return "";
+    const lines = resumeText.split("\n").map(l => l.trim()).filter(Boolean).slice(0, 10);
+    for (const line of lines) {
+      if (line.includes("Experience") || line.includes("Education") || line.includes("Skills")) continue;
+      const parts = line.split(/[|•\t]|\s{2,}/);
+      for (const part of parts) {
+        const cleanPart = part.trim();
+        const match = cleanPart.match(/^([a-zA-Z\s\.]+),\s*([a-zA-Z\s]{2,})(?:\s*,\s*([a-zA-Z\s]+))?$/);
+        if (match) {
+          const stateOrProv = match[2].trim();
+          if (!/^\d+$/.test(stateOrProv) && !stateOrProv.includes("@")) {
+            return cleanPart;
+          }
+        }
+      }
+    }
+    const fallbackRegexes = [
+      /([A-Z][a-zA-Z\s\.]+,\s*[A-Z][a-zA-Z\s]+,\s*Canada)/,
+      /([A-Z][a-zA-Z\s\.]+,\s*[A-Z][a-zA-Z\s]+,\s*USA?)/,
+      /([A-Z][a-zA-Z\s\.]+,\s*[A-Z]{2})/
+    ];
+    for (const regex of fallbackRegexes) {
+      const match = resumeText.match(regex);
+      if (match) {
+        return match[1].trim();
+      }
+    }
+    return "";
+  };
+
+  const handleCareerBeaconSearchAutomation = async (searchState) => {
+    turboRunning = true;
+    if (!shadowRoot) {
+      injectShadowDOM();
+    }
+    const tabDetails = shadowRoot.querySelector("#tab-btn-details");
+    const tabTurbo = shadowRoot.querySelector("#tab-btn-turbo");
+    const panelDetails = shadowRoot.querySelector("#panel-details");
+    const panelTurbo = shadowRoot.querySelector("#panel-turbo");
+    if (tabDetails) tabDetails.classList.remove("active");
+    if (tabTurbo) tabTurbo.classList.add("active");
+    if (panelDetails) panelDetails.style.display = "none";
+    if (panelTurbo) panelTurbo.style.display = "block";
+    
+    const consoleContainer = shadowRoot.querySelector("#turbo-console-container");
+    const consoleBox = shadowRoot.querySelector("#turbo-console");
+    if (consoleContainer) consoleContainer.style.display = "block";
+    
+    const logMessage = (msg, level = "INFO") => {
+      console.log(`[AI Job Apply Turbo] [${level}] ${msg}`);
+      const timestamp = new Date().toLocaleTimeString();
+      if (consoleBox) {
+        consoleBox.innerHTML += `[${timestamp}] ${msg}\n`;
+        consoleBox.scrollTop = consoleBox.scrollHeight;
+      }
+      try {
+        remoteLog(level, msg, "careerbeacon-search");
+      } catch (err) {}
+    };
+
+    logMessage("CareerBeacon search automation running...");
+    const isSearchPage = window.location.pathname.includes("/search") || window.location.pathname.includes("/rechercher");
+    if (!isSearchPage) {
+      logMessage("Not on search page. Locating 'Search Jobs' link...");
+      const searchJobsBtn = findSearchJobsBtn();
+      if (searchJobsBtn) {
+        logMessage("Found 'Search Jobs' button. Navigating...");
+        if (searchJobsBtn.tagName === "A" && searchJobsBtn.href) {
+          window.location.href = searchJobsBtn.href;
+        } else {
+          searchJobsBtn.click();
+        }
+        return;
+      } else {
+        logMessage("Search button not found. Direct redirecting to search...");
+        window.location.href = "https://www.careerbeacon.com/en/search";
+        return;
+      }
+    }
+
+    if (searchState.status === "navigating_to_search") {
+      logMessage("Search page loaded. Extracting keywords...");
+      let profileObj = null;
+      try {
+        profileObj = typeof searchState.profile_json === 'string' ? JSON.parse(searchState.profile_json) : searchState.profile_json;
+      } catch (e) {}
+
+      if (!profileObj) {
+        logMessage("ERROR: Profile could not be parsed. Stopping search automation.");
+        await new Promise(r => chrome.storage.local.remove(["careerbeacon_search_state"], r));
+        return;
+      }
+
+      const jobTitle = profileObj.title;
+      const location = extractLocationFromResume(profileObj.resume_text) || profileObj.city || "Toronto";
+      
+      logMessage(`Target job title: "${jobTitle}"`);
+      logMessage(`Target location: "${location}"`);
+
+      let keywordInput = document.querySelector("input#search_keyword, input[name='search_keyword'], input[placeholder*='Job Title'], input[placeholder*='Keywords']");
+      let locationInput = document.querySelector("input#search_location, input[name='search_location'], input[placeholder*='City'], input[placeholder*='Location']");
+      let searchBtn = document.querySelector("button#btn_search, button[type='submit'], input[type='submit']");
+
+      if (!keywordInput || !locationInput || !searchBtn) {
+        logMessage("Inputs not ready. Waiting 1.5 seconds...");
+        await sleep(1500);
+        keywordInput = document.querySelector("input#search_keyword, input[name='search_keyword'], input[placeholder*='Job Title'], input[placeholder*='Keywords']");
+        locationInput = document.querySelector("input#search_location, input[name='search_location'], input[placeholder*='City'], input[placeholder*='Location']");
+        searchBtn = document.querySelector("button#btn_search, button[type='submit'], input[type='submit']");
+      }
+
+      if (!keywordInput || !locationInput) {
+        logMessage("ERROR: Search inputs missing. Stopping.");
+        await new Promise(r => chrome.storage.local.remove(["careerbeacon_search_state"], r));
+        return;
+      }
+
+      logMessage("Populating search parameters...");
+      keywordInput.value = jobTitle;
+      keywordInput.dispatchEvent(new Event("input", { bubbles: true }));
+      keywordInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+      locationInput.value = location;
+      locationInput.dispatchEvent(new Event("input", { bubbles: true }));
+      locationInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+      await sleep(1000);
+      logMessage("Submitting search...");
+      searchState.status = "submitted";
+      await new Promise(r => chrome.storage.local.set({ careerbeacon_search_state: searchState }, r));
+
+      if (searchBtn) {
+        searchBtn.click();
+      } else {
+        keywordInput.closest("form")?.submit();
+      }
+      return;
+    }
+
+    if (searchState.status === "submitted") {
+      logMessage("Search results loaded. Extracting jobs...");
+      const jobCards = ActiveConnector.getJobCards();
+      if (jobCards.length === 0) {
+        logMessage("No jobs found for the search parameters. Stopping.");
+        await new Promise(r => chrome.storage.local.remove(["careerbeacon_search_state"], r));
+        return;
+      }
+
+      const jobUrls = jobCards.map(card => {
+        const link = card.querySelector("a[href*='/posting/'], a[href*='/job-'], a[href*='/job/']") || 
+                     (card.tagName === "A" && (card.href.includes("/posting/") || card.href.includes("/job-") || card.href.includes("/job/")) ? card : null);
+        return link ? link.href : null;
+      }).filter(url => url !== null);
+
+      if (jobUrls.length === 0) {
+        logMessage("No job posting URLs found. Stopping.");
+        await new Promise(r => chrome.storage.local.remove(["careerbeacon_search_state"], r));
+        return;
+      }
+
+      logMessage(`Found ${jobUrls.length} jobs. Initializing CareerBeacon Turbo state...`);
+      const careerbeacon_turbo_state = {
+        active: true,
+        profile_id: searchState.profile_id,
+        profile_json: searchState.profile_json,
+        limit: searchState.limit,
+        applied_count: 0,
+        listing_page_url: window.location.href,
+        job_urls: jobUrls,
+        current_index: 0,
+        status: "navigating_to_job"
+      };
+
+      await new Promise(r => {
+        chrome.storage.local.remove(["careerbeacon_search_state"], () => {
+          chrome.storage.local.set({ careerbeacon_turbo_state: careerbeacon_turbo_state }, r);
+        });
+      });
+
+      logMessage(`Navigating to first job: ${jobUrls[0]}`);
+      await sleep(1500);
+      window.location.href = jobUrls[0];
+    }
+  };
+
+  const resumeCareerBeaconTurboMode = async (state) => {
+    turboRunning = true;
+    
+    // Inject Shadow DOM and show Turbo Panel
+    if (!shadowRoot) {
+      injectShadowDOM();
+    }
+    
+    const tabDetails = shadowRoot.querySelector("#tab-btn-details");
+    const tabTurbo = shadowRoot.querySelector("#tab-btn-turbo");
+    const panelDetails = shadowRoot.querySelector("#panel-details");
+    const panelTurbo = shadowRoot.querySelector("#panel-turbo");
+    
+    if (tabDetails) tabDetails.classList.remove("active");
+    if (tabTurbo) tabTurbo.classList.add("active");
+    if (panelDetails) panelDetails.style.display = "none";
+    if (panelTurbo) panelTurbo.style.display = "block";
+    
+    const consoleContainer = shadowRoot.querySelector("#turbo-console-container");
+    const consoleBox = shadowRoot.querySelector("#turbo-console");
+    const progressSpan = shadowRoot.querySelector("#turbo-progress");
+    const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+    
+    if (consoleContainer) consoleContainer.style.display = "block";
+    if (progressSpan) progressSpan.innerText = `${state.applied_count}/${state.limit}`;
+    if (turboBtn) {
+      turboBtn.classList.add("danger");
+      turboBtn.innerHTML = "<span>Stop Turbo Mode</span>";
+      turboBtn.dataset.profileJson = state.profile_json;
+    }
+    
+    const logMessage = (msg, level = "INFO") => {
+      console.log(`[AI Job Apply Turbo] [${level}] ${msg}`);
+      const timestamp = new Date().toLocaleTimeString();
+      if (consoleBox) {
+        consoleBox.innerHTML += `[${timestamp}] ${msg}\n`;
+        consoleBox.scrollTop = consoleBox.scrollHeight;
+      }
+      
+      try {
+        const currentJobId = ActiveConnector.getJobId();
+        remoteLog(level, msg, currentJobId);
+      } catch (err) {
+        console.warn("[AI Job Apply] Error sending remote log:", err);
+      }
+    };
+    
+    logMessage(`Resuming Turbo Mode progress: ${state.applied_count}/${state.limit}...`);
+    
+    const jobId = ActiveConnector.getJobId();
+    if (!jobId) {
+      logMessage("Could not retrieve Job ID on current page. Skipping to next job...");
+      state.current_index++;
+      await new Promise(r => chrome.storage.local.set({ careerbeacon_turbo_state: state }, r));
+      navigateToNextCareerBeaconJob(state, logMessage);
+      return;
+    }
+    
+    const jobData = ActiveConnector.scrapeDetails(jobId);
+    logMessage(`Loaded job: "${jobData.title}" at "${jobData.company_name}"`);
+    
+    if (ActiveConnector.isAlreadyApplied && ActiveConnector.isAlreadyApplied()) {
+      logMessage("Job already marked as 'Applied' on platform. Skipping...");
+      state.applied_count++;
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "Applied");
+        logMessage("Synced status to Kanban board.");
+      } catch (err) {
+        logMessage(`Database sync failed: ${err.message}`);
+      }
+      
+      await new Promise(r => chrome.storage.local.set({ careerbeacon_turbo_state: state }, r));
+      navigateToNextCareerBeaconJob(state, logMessage);
+      return;
+    }
+    
+    const easyApplyBtn = ActiveConnector.getEasyApplyButton();
+    if (!easyApplyBtn) {
+      logMessage("No application form or Easy Apply button available. Skipping...");
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "needs-knowledge-graph");
+      } catch (err) {}
+      
+      await new Promise(r => chrome.storage.local.set({ careerbeacon_turbo_state: state }, r));
+      navigateToNextCareerBeaconJob(state, logMessage);
+      return;
+    }
+    
+    logMessage("Easy Apply option detected! Clicking apply...");
+    window.clickElement(easyApplyBtn);
+    await sleep(2500);
+
+    logMessage("Automating form fill...");
+    const fillSuccess = await ActiveConnector.EasyApply.automate(
+      JSON.parse(state.profile_json),
+      logMessage,
+      () => turboRunning && isContextValid()
+    );
+    
+    if (!fillSuccess) {
+      logMessage("Application failed, timed out, or was skipped.");
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "needs-knowledge-graph");
+        logMessage("Saved to database with status 'needs-knowledge-graph'.");
+      } catch (err) {}
+      
+      await new Promise(r => chrome.storage.local.set({ careerbeacon_turbo_state: state }, r));
+      navigateToNextCareerBeaconJob(state, logMessage);
+    } else {
+      logMessage("Application submitted! Syncing details to database...");
+      state.applied_count++;
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "Applied");
+        logMessage("Synced status to Kanban board.");
+      } catch (err) {}
+      
+      await new Promise(r => chrome.storage.local.set({ careerbeacon_turbo_state: state }, r));
+      navigateToNextCareerBeaconJob(state, logMessage);
+    }
+  };
+  
+  const navigateToNextCareerBeaconJob = async (state, logMessage) => {
+    if (state.applied_count >= state.limit || state.current_index >= state.job_urls.length) {
+      logMessage(`Turbo run finished! Applied to ${state.applied_count}/${state.limit} jobs.`);
+      
+      await new Promise(r => chrome.storage.local.remove(["careerbeacon_turbo_state"], r));
+      turboRunning = false;
+      
+      const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+      if (turboBtn) {
+        turboBtn.classList.remove("danger");
+        turboBtn.innerHTML = "<span>Turbo Run Complete!</span>";
+        setTimeout(() => {
+          turboBtn.innerHTML = "<span>Launch Turbo Mode</span>";
+        }, 3000);
+      }
+      
+      logMessage("Navigating back to main jobs listing...");
+      await sleep(2500);
+      window.location.href = state.listing_page_url;
+      return;
+    }
+    
+    const nextUrl = state.job_urls[state.current_index];
+    logMessage(`Navigating to next job URL in 3 seconds: ${nextUrl}`);
+    await sleep(3000);
+    window.location.href = nextUrl;
+  };
+
   const resumeZipRecruiterTurboMode = async (state) => {
     turboRunning = true;
     
@@ -2353,6 +2738,71 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       return;
     }
 
+    if (window.location.hostname.includes("careerbeacon.com")) {
+      const jobCards = ActiveConnector.getJobCards();
+      const isSearchPage = window.location.pathname.includes("/search") || window.location.pathname.includes("/rechercher");
+      
+      if (jobCards.length === 0 || !isSearchPage) {
+        logMessage("No job listings detected or not on search page. Starting CareerBeacon search automation...");
+        
+        const careerbeacon_search_state = {
+          active: true,
+          profile_id: profile.id,
+          profile_json: profileJsonStr,
+          limit: limit,
+          status: "navigating_to_search"
+        };
+        
+        await new Promise(r => chrome.storage.local.set({ careerbeacon_search_state: careerbeacon_search_state }, r));
+        
+        const searchJobsBtn = findSearchJobsBtn();
+        if (searchJobsBtn) {
+          logMessage("Found 'Search Jobs' link. Clicking...");
+          if (searchJobsBtn.tagName === "A" && searchJobsBtn.href) {
+            window.location.href = searchJobsBtn.href;
+          } else {
+            searchJobsBtn.click();
+          }
+        } else {
+          logMessage("Search Jobs link not found. Navigating directly to CareerBeacon search...");
+          window.location.href = "https://www.careerbeacon.com/en/search";
+        }
+        return;
+      }
+      
+      const jobUrls = jobCards.map(card => {
+        const link = card.querySelector("a[href*='/posting/'], a[href*='/job-'], a[href*='/job/']") || 
+                     (card.tagName === "A" && (card.href.includes("/posting/") || card.href.includes("/job-") || card.href.includes("/job/")) ? card : null);
+        return link ? link.href : null;
+      }).filter(url => url !== null);
+      
+      if (jobUrls.length === 0) {
+        logMessage("No job application URLs found in listing cards!");
+        stopTurboApply();
+        return;
+      }
+      
+      logMessage(`Found ${jobUrls.length} job URLs. Initializing CareerBeacon Multi-Job Turbo Mode...`);
+      
+      const careerbeacon_turbo_state = {
+        active: true,
+        profile_id: profile.id,
+        profile_json: profileJsonStr,
+        limit: limit,
+        applied_count: 0,
+        listing_page_url: window.location.href,
+        job_urls: jobUrls,
+        current_index: 0,
+        status: "navigating_to_job"
+      };
+      
+      await new Promise(r => chrome.storage.local.set({ careerbeacon_turbo_state: careerbeacon_turbo_state }, r));
+      logMessage(`Navigating to first job URL in 1.5 seconds: ${jobUrls[0]}`);
+      await sleep(1500);
+      window.location.href = jobUrls[0];
+      return;
+    }
+
     // retry phase: check database for retryable jobs with status 'needs-knowledge-graph'
     try {
       logMessage("Checking database for retryable jobs with status 'needs-knowledge-graph'...");
@@ -2606,7 +3056,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       turboBtn.innerHTML = "<span>Launch Turbo Mode</span>";
     }
     chrome.storage.local.set({ turbo_mode_active: false });
-    chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state"]);
+    chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state", "careerbeacon_turbo_state", "careerbeacon_search_state"]);
     updateWidgetUI();
   };
 

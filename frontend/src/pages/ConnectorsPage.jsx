@@ -65,7 +65,8 @@ const ConnectorsPage = () => {
     { name: "Glassdoor", color: "from-green-500 to-emerald-600" },
     { name: "Greenhouse", color: "from-teal-500 to-emerald-600" },
     { name: "Randstad", color: "from-sky-500 to-blue-600" },
-    { name: "Job Bank", color: "from-red-500 to-red-700" }
+    { name: "Job Bank", color: "from-red-500 to-red-700" },
+    { name: "CareerBeacon", color: "from-orange-500 to-amber-600" }
   ];
 
   if (loading) {
