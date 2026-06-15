@@ -62,7 +62,7 @@ setTimeout(async () => {
       console.log(`[Browser Console] ${msg.type().toUpperCase()}: ${msg.text()}`);
     });
     page.on('pageerror', err => {
-      console.log(`[Browser PageError] ${err.message}`);
+      console.log(`[Browser PageError] ${err.stack || err.message}`);
     });
 
     context.on('page', newPage => {
@@ -90,7 +90,7 @@ setTimeout(async () => {
         console.log(`[Browser Console Subtab] ${msg.type().toUpperCase()}: ${msg.text()}`);
       });
       newPage.on('pageerror', err => {
-        console.log(`[Browser PageError Subtab] ${err.message}`);
+        console.log(`[Browser PageError Subtab] ${err.stack || err.message}`);
       });
     });
 

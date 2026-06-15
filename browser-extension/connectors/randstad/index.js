@@ -288,10 +288,41 @@ window.Connectors.Randstad = {
       let previousHtml = "";
 
       while (checkRunning()) {
-        const form = document.querySelector("form, div[role='dialog'] form, .apply-form");
-        if (!form) {
-          logMessage("Form element not detected on the page. Waiting for modal/page...");
+        // Target #applicationForm and ignore newsletter/job alerts signup forms
+        const form = document.querySelector("#applicationForm");
+        const hasVisibleFields = form && Array.from(form.querySelectorAll("input, select, textarea, button")).some(el => {
+          return el.offsetWidth > 0 && el.offsetHeight > 0;
+        });
+
+        if (!hasVisibleFields) {
+          logMessage("Application form fields not visible yet. Waiting for modal/page...");
           await sleep(1500);
+          continue;
+        }
+
+        if (window.hasActiveCaptcha && window.hasActiveCaptcha()) {
+          logMessage("CAPTCHA detected on page! Pausing automation for manual resolution...");
+          
+          try {
+            const captchaInput = document.querySelector('input[name="frc-captcha-solution"]');
+            if (captchaInput && (captchaInput.value === '.UNSTARTED' || captchaInput.value === '.EXPIRED')) {
+              const captchaWidget = document.querySelector('.bluex-friendly-captcha, .frc-captcha, [class*="captcha"]');
+              if (captchaWidget) {
+                logMessage("[AI Job Apply] FriendlyCaptcha detected unstarted. Scrolling into view...");
+                captchaWidget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                const startBtn = captchaWidget.querySelector('.frc-button');
+                if (startBtn) {
+                  logMessage("[AI Job Apply] Auto-clicking FriendlyCaptcha start button...");
+                  startBtn.click();
+                }
+              }
+            }
+          } catch (e) {
+            console.error("[AI Job Apply] Error auto-triggering FriendlyCaptcha:", e);
+          }
+
+          await sleep(3000);
           continue;
         }
 
@@ -483,7 +514,7 @@ window.Connectors.Randstad = {
         // Click next / continue / submit button
         const continueBtn = Array.from(form.querySelectorAll("button, input[type='submit']")).find(el => {
           const text = (el.innerText || el.textContent || el.value || "").toLowerCase();
-          return text.includes("continue") || text.includes("next") || text.includes("submit") || text.includes("apply") || text.includes("candidater");
+          return text.includes("continue") || text.includes("next") || text.includes("submit") || text.includes("apply") || text.includes("candidater") || el.id === "apply-button";
         });
 
         if (continueBtn) {

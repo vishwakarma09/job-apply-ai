@@ -1546,6 +1546,10 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
   };
   
   const navigateToNextTurboJob = async (state, logMessage) => {
+    if (!turboRunning || !isContextValid()) {
+      logMessage("Turbo Mode stopped by user. Aborting navigation.");
+      return;
+    }
     if (state.applied_count >= state.limit || state.current_index >= state.job_urls.length) {
       logMessage(`Turbo run finished! Applied to ${state.applied_count}/${state.limit} jobs.`);
       
@@ -1624,14 +1628,41 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     
     const jobId = ActiveConnector.getJobId();
     if (!jobId) {
-      logMessage("Could not retrieve Job ID on current page. Skipping to next job...");
+      // Check if we are on a confirmation/success page
+      const hasConfirmationText = Array.from(document.querySelectorAll("h1, h2, h3, h4, p, span, div")).some(el => {
+        const txt = (el.innerText || "").toLowerCase();
+        return txt.includes("thank you") || txt.includes("submitted") || txt.includes("application complete") || txt.includes("success") || txt.includes("candidature envoyée");
+      });
+      
+      if (hasConfirmationText && state.current_job_data) {
+        logMessage(`Detected confirmation page! Syncing job as Applied: "${state.current_job_data.title}"...`);
+        state.applied_count++;
+        state.current_index++;
+        
+        try {
+          await syncJobToBackend(state.current_job_data, state.profile_id, "Applied");
+          logMessage("Synced status to Kanban board.");
+        } catch (err) {
+          logMessage(`Database sync failed: ${err.message}`);
+        }
+        
+        delete state.current_job_data;
+        await new Promise(r => chrome.storage.local.set({ randstad_turbo_state: state }, r));
+        navigateToNextRandstadJob(state, logMessage);
+        return;
+      }
+
+      logMessage("Could not retrieve Job ID on current page. Skipping to next job... (not confirmation page)");
       state.current_index++;
+      delete state.current_job_data;
       await new Promise(r => chrome.storage.local.set({ randstad_turbo_state: state }, r));
       navigateToNextRandstadJob(state, logMessage);
       return;
     }
     
     const jobData = ActiveConnector.scrapeDetails(jobId);
+    state.current_job_data = jobData;
+    await new Promise(r => chrome.storage.local.set({ randstad_turbo_state: state }, r));
     logMessage(`Loaded job: "${jobData.title}" at "${jobData.company_name}"`);
     
     if (ActiveConnector.isAlreadyApplied && ActiveConnector.isAlreadyApplied()) {
@@ -1646,6 +1677,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         logMessage(`Database sync failed: ${err.message}`);
       }
       
+      delete state.current_job_data;
       await new Promise(r => chrome.storage.local.set({ randstad_turbo_state: state }, r));
       navigateToNextRandstadJob(state, logMessage);
       return;
@@ -1660,6 +1692,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         await syncJobToBackend(jobData, state.profile_id, "needs-knowledge-graph");
       } catch (err) {}
       
+      delete state.current_job_data;
       await new Promise(r => chrome.storage.local.set({ randstad_turbo_state: state }, r));
       navigateToNextRandstadJob(state, logMessage);
       return;
@@ -1667,7 +1700,34 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     
     logMessage("Easy Apply option detected! Clicking apply...");
     window.clickElement(easyApplyBtn);
-    await sleep(2500);
+    
+    // Wait for modal to open, retry if needed
+    let modalOpened = false;
+    for (let retry = 0; retry < 3; retry++) {
+      await sleep(1500);
+      const form = document.querySelector("#applicationForm");
+      const hasVisibleFields = form && Array.from(form.querySelectorAll("input, select, textarea, button")).some(el => {
+        return el.offsetWidth > 0 && el.offsetHeight > 0;
+      });
+      if (hasVisibleFields) {
+        modalOpened = true;
+        break;
+      }
+      if (retry < 2) {
+        logMessage(`Modal didn't open. Retrying click (attempt ${retry + 2}/3)...`);
+        window.clickElement(easyApplyBtn);
+      }
+    }
+
+    if (!modalOpened) {
+      logMessage("Failed to open application modal after retries. Skipping...");
+      state.current_index++;
+      delete state.current_job_data;
+      await new Promise(r => chrome.storage.local.set({ randstad_turbo_state: state }, r));
+      navigateToNextRandstadJob(state, logMessage);
+      return;
+    }
+
 
     logMessage("Automating form fill...");
     const fillSuccess = await ActiveConnector.EasyApply.automate(
@@ -1685,6 +1745,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         logMessage("Saved to database with status 'needs-knowledge-graph'.");
       } catch (err) {}
       
+      delete state.current_job_data;
       await new Promise(r => chrome.storage.local.set({ randstad_turbo_state: state }, r));
       navigateToNextRandstadJob(state, logMessage);
     } else {
@@ -1697,12 +1758,17 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         logMessage("Synced status to Kanban board.");
       } catch (err) {}
       
+      delete state.current_job_data;
       await new Promise(r => chrome.storage.local.set({ randstad_turbo_state: state }, r));
       navigateToNextRandstadJob(state, logMessage);
     }
   };
   
   const navigateToNextRandstadJob = async (state, logMessage) => {
+    if (!turboRunning || !isContextValid()) {
+      logMessage("Turbo Mode stopped by user. Aborting navigation.");
+      return;
+    }
     if (state.applied_count >= state.limit || state.current_index >= state.job_urls.length) {
       logMessage(`Turbo run finished! Applied to ${state.applied_count}/${state.limit} jobs.`);
       
@@ -1860,6 +1926,10 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
   };
   
   const navigateToNextJobBankJob = async (state, logMessage) => {
+    if (!turboRunning || !isContextValid()) {
+      logMessage("Turbo Mode stopped by user. Aborting navigation.");
+      return;
+    }
     if (state.applied_count >= state.limit || state.current_index >= state.job_urls.length) {
       logMessage(`Turbo run finished! Applied to ${state.applied_count}/${state.limit} jobs.`);
       
@@ -2223,6 +2293,10 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
   };
   
   const navigateToNextCareerBeaconJob = async (state, logMessage) => {
+    if (!turboRunning || !isContextValid()) {
+      logMessage("Turbo Mode stopped by user. Aborting navigation.");
+      return;
+    }
     if (state.applied_count >= state.limit || state.current_index >= state.job_urls.length) {
       logMessage(`Turbo run finished! Applied to ${state.applied_count}/${state.limit} jobs.`);
       

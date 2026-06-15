@@ -73,11 +73,29 @@ window.debugRemoteLog = function(message) {
 
 window.clickElement = (element) => {
   if (!element) return;
-  const opts = { bubbles: true, cancelable: true, view: window };
-  element.dispatchEvent(new MouseEvent("mousedown", opts));
-  element.dispatchEvent(new MouseEvent("mouseup", opts));
-  element.click();
+  
+  const hasMainWorld = document.documentElement.getAttribute('data-ai-main-loaded') === 'true';
+  if (hasMainWorld) {
+    // Assign a unique temporary attribute
+    const clickId = "click_" + Math.random().toString(36).substr(2, 9);
+    element.setAttribute("data-ai-click-target", clickId);
+    
+    // Trigger click in MAIN world
+    window.dispatchEvent(new CustomEvent("AI_JOB_APPLY_TRIGGER_CLICK", {
+      detail: { targetId: clickId }
+    }));
+    
+    // Clean up the attribute
+    element.removeAttribute("data-ai-click-target");
+  } else {
+    // Fallback to local dispatch in content script context
+    const opts = { bubbles: true, cancelable: true, view: window };
+    element.dispatchEvent(new MouseEvent("mousedown", opts));
+    element.dispatchEvent(new MouseEvent("mouseup", opts));
+    element.dispatchEvent(new MouseEvent("click", opts));
+  }
 };
+
 
 window.sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -207,6 +225,12 @@ window.hasActiveCaptcha = () => {
         }
       }
     }
+  }
+
+  // 3. Check for unsolved FriendlyCaptcha
+  const friendlyCaptchaInput = document.querySelector('input[name="frc-captcha-solution"]');
+  if (friendlyCaptchaInput && (!friendlyCaptchaInput.value || friendlyCaptchaInput.value.startsWith('.'))) {
+    return true;
   }
 
   return false;
