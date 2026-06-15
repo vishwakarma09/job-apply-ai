@@ -6,7 +6,7 @@ let ActiveConnector = null;
 // Immediate evaluation log for debugging smartapply tab loading
 debugRemoteLog("Script evaluated on: " + window.location.href);
 
-if (window.location.hostname.includes("indeed.com") || window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com")) {
+if (window.location.hostname.includes("indeed.com") || window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com") || window.location.hostname.includes("ziprecruiter.com")) {
   // ActiveConnector is initialized in main widget engine block
   window.addEventListener("AI_JOB_APPLY_INTERCEPTED_OPEN", (event) => {
     const { url } = event.detail;
@@ -148,7 +148,7 @@ if (window.location.hostname === "localhost" || window.location.hostname === "12
 // ==========================================
 // 3. MAIN WIDGET ENGINE & AUTO-APPLY LOOP
 // ==========================================
-if (window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("indeed.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com")) {
+if (window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("indeed.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com") || window.location.hostname.includes("ziprecruiter.com")) {
   if (window.location.hostname.includes("indeed.com")) {
     ActiveConnector = Connectors.Indeed;
   } else if (window.location.hostname.includes("linkedin.com")) {
@@ -157,6 +157,8 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     ActiveConnector = Connectors.Greenhouse;
   } else if (window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com")) {
     ActiveConnector = Connectors.Glassdoor;
+  } else if (window.location.hostname.includes("ziprecruiter.com")) {
+    ActiveConnector = Connectors.ZipRecruiter;
   }
   let activeJobId = null;
   let shadowRoot = null;
@@ -212,6 +214,20 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         if (state && state.active) {
           console.log("[AI Job Apply] Resuming Greenhouse Turbo Mode...", state);
           resumeGreenhouseTurboMode(state);
+          return;
+        }
+        continueScraperSetup();
+      });
+      return;
+    }
+
+    if (window.location.hostname.includes("ziprecruiter.com")) {
+      chrome.storage.local.get(["ziprecruiter_turbo_state"], (res) => {
+        if (!isContextValid()) return;
+        const state = res.ziprecruiter_turbo_state;
+        if (state && state.active) {
+          console.log("[AI Job Apply] Resuming ZipRecruiter Turbo Mode...", state);
+          resumeZipRecruiterTurboMode(state);
           return;
         }
         continueScraperSetup();
@@ -1268,6 +1284,70 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
   };
 
+  const doesJobTitleMatchProfile = (jobTitle, profileTitle) => {
+    if (!profileTitle) return true;
+    if (!jobTitle) return false;
+
+    const clean = (str) => str.toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s-]+/g, ' ')
+      .trim();
+
+    const cleanJob = clean(jobTitle);
+    const cleanProfile = clean(profileTitle);
+
+    if (cleanJob.includes(cleanProfile) || cleanProfile.includes(cleanJob)) {
+      return true;
+    }
+
+    const stopwords = new Set([
+      'and', 'or', 'in', 'of', 'the', 'a', 'for', 'with', 'to', 'at', 'on', 'by',
+      'senior', 'junior', 'sr', 'jr', 'lead', 'staff', 'principal', 'entry', 'level',
+      'contract', 'contractor', 'intern', 'internship', 'part', 'time', 'full', 'temporary',
+      'associate', 'assistant', 'expert', 'hiring', 'urgent', 'urgently'
+    ]);
+
+    const getKeywords = (str) => str.split(' ').filter(word => word.length > 1 && !stopwords.has(word));
+
+    const jobKeywords = getKeywords(cleanJob);
+    const profileKeywords = getKeywords(cleanProfile);
+
+    if (profileKeywords.length === 0) return true;
+
+    let matchedCount = 0;
+    for (const pKw of profileKeywords) {
+      const matched = jobKeywords.some(jKw => jKw.includes(pKw) || pKw.includes(jKw));
+      if (matched) {
+        matchedCount++;
+      }
+    }
+
+    const requiredMatches = profileKeywords.length === 1 ? 1 : Math.max(2, Math.ceil(profileKeywords.length / 2));
+    if (matchedCount >= requiredMatches) {
+      return true;
+    }
+
+    const synonyms = [
+      ['developer', 'engineer', 'programmer', 'coder', 'dev'],
+      ['representative', 'rep', 'agent', 'specialist', 'associate'],
+      ['administrator', 'admin', 'coordinator'],
+      ['manager', 'lead', 'director']
+    ];
+
+    let synonymMatchedCount = 0;
+    for (const pKw of profileKeywords) {
+      const matched = jobKeywords.some(jKw => {
+        if (jKw.includes(pKw) || pKw.includes(jKw)) return true;
+        return synonyms.some(group => group.includes(pKw) && group.includes(jKw));
+      });
+      if (matched) {
+        synonymMatchedCount++;
+      }
+    }
+
+    return synonymMatchedCount >= requiredMatches;
+  };
+
   const resumeGreenhouseTurboMode = async (state) => {
     turboRunning = true;
     
@@ -1300,6 +1380,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
     
     const logMessage = (msg, level = "INFO") => {
+      console.log(`[AI Job Apply Turbo] [${level}] ${msg}`);
       const timestamp = new Date().toLocaleTimeString();
       if (consoleBox) {
         consoleBox.innerHTML += `[${timestamp}] ${msg}\n`;
@@ -1438,6 +1519,298 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     window.location.href = nextUrl;
   };
 
+  const resumeZipRecruiterTurboMode = async (state) => {
+    turboRunning = true;
+    
+    if (!shadowRoot) {
+      injectShadowDOM();
+    }
+    
+    const tabDetails = shadowRoot.querySelector("#tab-btn-details");
+    const tabTurbo = shadowRoot.querySelector("#tab-btn-turbo");
+    const panelDetails = shadowRoot.querySelector("#panel-details");
+    const panelTurbo = shadowRoot.querySelector("#panel-turbo");
+    
+    if (tabDetails) tabDetails.classList.remove("active");
+    if (tabTurbo) tabTurbo.classList.add("active");
+    if (panelDetails) panelDetails.style.display = "none";
+    if (panelTurbo) panelTurbo.style.display = "block";
+    
+    const consoleContainer = shadowRoot.querySelector("#turbo-console-container");
+    const consoleBox = shadowRoot.querySelector("#turbo-console");
+    const progressSpan = shadowRoot.querySelector("#turbo-progress");
+    const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+    
+    if (consoleContainer) consoleContainer.style.display = "block";
+    if (progressSpan) progressSpan.innerText = `${state.applied_count}/${state.limit}`;
+    if (turboBtn) {
+      turboBtn.classList.add("danger");
+      turboBtn.innerHTML = "<span>Stop Turbo Mode</span>";
+      turboBtn.dataset.profileJson = state.profile_json;
+    }
+    
+    const logMessage = (msg, level = "INFO") => {
+      console.log(`[AI Job Apply Turbo] [${level}] ${msg}`);
+      const timestamp = new Date().toLocaleTimeString();
+      if (consoleBox) {
+        consoleBox.innerHTML += `[${timestamp}] ${msg}\n`;
+        consoleBox.scrollTop = consoleBox.scrollHeight;
+      }
+      
+      try {
+        const currentJobId = ActiveConnector.getJobId();
+        remoteLog(level, msg, currentJobId);
+      } catch (err) {
+        console.warn("[AI Job Apply] Error sending remote log:", err);
+      }
+    };
+    
+    logMessage(`Resuming ZipRecruiter Turbo Mode progress: ${state.applied_count}/${state.limit}...`);
+    
+    const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+    const token = storage.token;
+    const api = storage.apiUrl || API_DEFAULT_URL;
+    
+    const jobId = ActiveConnector.getJobId();
+    
+    if (state.current_job_status === "filling_form" && state.current_job_id) {
+      const activeForm = document.querySelector("div[role='dialog'], [class*='modal'], [id*='modal'], form[class*='apply'], form[id*='apply'], .ziprecruiter-apply-container");
+      if (activeForm) {
+        logMessage("Resuming application form flow...");
+        const fillSuccess = await ActiveConnector.EasyApply.automate(
+          JSON.parse(state.profile_json),
+          logMessage,
+          () => turboRunning && isContextValid()
+        );
+        
+        await handleZipRecruiterFormOutcome(state, fillSuccess, logMessage);
+      } else {
+        logMessage("Form modal closed. Checking application outcome...");
+        await sleep(1000);
+        
+        const successHeading = Array.from(document.querySelectorAll('h1, h2, h3, h4, p, span, div[class*="success"], div[class*="submitted"], div[id*="success"], div[id*="submitted"], .success')).find(el => {
+          if (typeof window.isElementVisible === 'function' && !window.isElementVisible(el)) return false;
+          const text = el.innerText.toLowerCase();
+          return text.includes("submitted") || text.includes("application sent") || text.includes("success") || text.includes("thank you for applying");
+        });
+        
+        const isApplied = ActiveConnector.isAlreadyApplied && ActiveConnector.isAlreadyApplied();
+        
+        if (successHeading || isApplied) {
+          await handleZipRecruiterFormOutcome(state, true, logMessage);
+        } else {
+          await handleZipRecruiterFormOutcome(state, false, logMessage);
+        }
+      }
+      return;
+    }
+    
+    if (!jobId) {
+      logMessage("No active job details loaded. Advancing search list...");
+      processNextZipRecruiterJob(state, logMessage);
+      return;
+    }
+    
+    const jobData = ActiveConnector.scrapeDetails(jobId);
+    logMessage(`Loaded job: "${jobData.title}" at "${jobData.company_name}"`);
+
+    let profileObj = null;
+    try {
+      profileObj = typeof state.profile_json === 'string' ? JSON.parse(state.profile_json) : state.profile_json;
+    } catch (e) {}
+
+    if (profileObj && profileObj.title && jobData.title) {
+      if (!doesJobTitleMatchProfile(jobData.title, profileObj.title)) {
+        logMessage(`Job title "${jobData.title}" does not match active profile title "${profileObj.title}". Skipping...`);
+        state.processed_job_ids.push(jobId);
+        state.current_index++;
+        await saveZipRecruiterState(state);
+        processNextZipRecruiterJob(state, logMessage);
+        return;
+      }
+    }
+    
+    if (state.processed_job_ids.includes(jobId)) {
+      logMessage("Job already processed in this batch. Advancing...");
+      state.current_index++;
+      await saveZipRecruiterState(state);
+      processNextZipRecruiterJob(state, logMessage);
+      return;
+    }
+    
+    if (ActiveConnector.isAlreadyApplied && ActiveConnector.isAlreadyApplied()) {
+      logMessage("Job already marked as 'Applied' on platform. Skipping...");
+      state.applied_count++;
+      state.processed_job_ids.push(jobId);
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "Applied");
+        logMessage("Synced status to Kanban board.");
+      } catch (err) {
+        logMessage(`Database sync failed: ${err.message}`);
+      }
+      
+      await saveZipRecruiterState(state);
+      processNextZipRecruiterJob(state, logMessage);
+      return;
+    }
+    
+    const easyApplyBtn = ActiveConnector.getEasyApplyButton();
+    if (!easyApplyBtn) {
+      logMessage("No 'Easy Apply' button available for this listing. Skipping...");
+      state.processed_job_ids.push(jobId);
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "needs-knowledge-graph");
+      } catch (err) {}
+      
+      await saveZipRecruiterState(state);
+      processNextZipRecruiterJob(state, logMessage);
+      return;
+    }
+    
+    logMessage("Easy Apply option detected! Launching form automation...");
+    state.current_job_id = jobId;
+    state.current_job_title = jobData.title;
+    state.current_job_company = jobData.company_name;
+    state.current_job_status = "filling_form";
+    await saveZipRecruiterState(state);
+    
+    window.clickElement(easyApplyBtn);
+    await sleep(1500);
+    
+    const fillSuccess = await ActiveConnector.EasyApply.automate(
+      JSON.parse(state.profile_json),
+      logMessage,
+      () => turboRunning && isContextValid()
+    );
+    
+    await handleZipRecruiterFormOutcome(state, fillSuccess, logMessage);
+  };
+  
+  const handleZipRecruiterFormOutcome = async (state, fillSuccess, logMessage) => {
+    state.processed_job_ids.push(state.current_job_id);
+    
+    const jobData = ActiveConnector.scrapeDetails(state.current_job_id);
+    if (jobData.title === "Unknown Position" && state.current_job_title) {
+      jobData.title = state.current_job_title;
+    }
+    if (jobData.company_name === "Unknown Company" && state.current_job_company) {
+      jobData.company_name = state.current_job_company;
+    }
+    
+    if (fillSuccess) {
+      logMessage("Application submitted successfully! Syncing details to database...");
+      state.applied_count++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "Applied");
+        logMessage("Synced status to Kanban board.");
+      } catch (err) {
+        logMessage(`Database sync failed: ${err.message}`);
+      }
+    } else {
+      logMessage("Application failed, timed out, or was skipped.");
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "needs-knowledge-graph");
+        logMessage("Saved to database with status 'needs-knowledge-graph' for future retry.");
+      } catch (err) {}
+    }
+    
+    state.current_index++;
+    state.current_job_id = null;
+    state.current_job_title = "";
+    state.current_job_company = "";
+    state.current_job_status = "idle";
+    await saveZipRecruiterState(state);
+    
+    logMessage("Cooling down before next application...");
+    await sleep(2500);
+    processNextZipRecruiterJob(state, logMessage);
+  };
+  
+  const processNextZipRecruiterJob = async (state, logMessage) => {
+    const jobCards = ActiveConnector.getJobCards();
+    const progressSpan = shadowRoot.querySelector("#turbo-progress");
+    if (progressSpan) progressSpan.innerText = `${state.applied_count}/${state.limit}`;
+    
+    if (state.applied_count >= state.limit || state.current_index >= jobCards.length) {
+      logMessage(`Turbo run finished! Applied to ${state.applied_count}/${state.limit} jobs.`);
+      await new Promise(r => chrome.storage.local.remove(["ziprecruiter_turbo_state"], r));
+      turboRunning = false;
+      
+      const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+      if (turboBtn) {
+        turboBtn.classList.remove("danger");
+        turboBtn.innerHTML = "<span>Turbo Run Complete!</span>";
+        setTimeout(() => {
+          turboBtn.innerHTML = "<span>Launch Turbo Mode</span>";
+        }, 3000);
+      }
+      return;
+    }
+    
+    const card = jobCards[state.current_index];
+    logMessage(`--- Job Item ${state.current_index + 1}/${jobCards.length} ---`);
+    
+    const cardDetails = ActiveConnector.scrapeCardDetails(card);
+    if (cardDetails) {
+      logMessage(`Selecting: "${cardDetails.title}" at "${cardDetails.company}"...`);
+      
+      let profileObj = null;
+      try {
+        profileObj = typeof state.profile_json === 'string' ? JSON.parse(state.profile_json) : state.profile_json;
+      } catch (e) {}
+
+      if (profileObj && profileObj.title && cardDetails.title) {
+        if (!doesJobTitleMatchProfile(cardDetails.title, profileObj.title)) {
+          logMessage(`Job title "${cardDetails.title}" does not match active profile title "${profileObj.title}". Skipping card...`);
+          const cardJobId = card.getAttribute('data-job-id') || card.getAttribute('data-id') || card.getAttribute('id') || `card_${state.current_index}`;
+          state.processed_job_ids.push(cardJobId);
+          state.current_index++;
+          await saveZipRecruiterState(state);
+          processNextZipRecruiterJob(state, logMessage);
+          return;
+        }
+      }
+    }
+    
+    try {
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (e) {
+      console.warn("[AI Job Apply] scrollIntoView failed:", e);
+    }
+    await sleep(800);
+    
+    state.current_job_status = "loading_details";
+    await saveZipRecruiterState(state);
+    
+    ActiveConnector.clickJobCard(card);
+    logMessage("Clicked job card. Waiting for details to load/reload...");
+    await sleep(5000);
+
+    // If the page did not reload, resume execution manually
+    if (turboRunning && isContextValid()) {
+      chrome.storage.local.get(["ziprecruiter_turbo_state"], async (res) => {
+        if (!isContextValid()) return;
+        const freshState = res.ziprecruiter_turbo_state;
+        if (freshState && freshState.active && freshState.current_job_status === "loading_details") {
+          logMessage("No page reload detected. Analyzing job details...");
+          freshState.current_job_status = "analyzing_details";
+          await saveZipRecruiterState(freshState);
+          resumeZipRecruiterTurboMode(freshState);
+        }
+      });
+    }
+  };
+  
+  const saveZipRecruiterState = (state) => {
+    return new Promise(r => chrome.storage.local.set({ ziprecruiter_turbo_state: state }, r));
+  };
+
   // ==========================================
   // 4. TURBO MODE AUTOMATION ENGINE
   // ==========================================
@@ -1468,6 +1841,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     progressSpan.innerText = `0/${limit}`;
 
     const logMessage = (msg, level = "INFO") => {
+      console.log(`[AI Job Apply Turbo] [${level}] ${msg}`);
       const timestamp = new Date().toLocaleTimeString();
       consoleBox.innerHTML += `[${timestamp}] ${msg}\n`;
       consoleBox.scrollTop = consoleBox.scrollHeight;
@@ -1520,6 +1894,36 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       logMessage(`Navigating to first job URL in 1.5 seconds: ${jobUrls[0]}`);
       await sleep(1500);
       window.location.href = jobUrls[0];
+      return;
+    }
+
+    if (window.location.hostname.includes("ziprecruiter.com")) {
+      const jobCards = ActiveConnector.getJobCards();
+      if (jobCards.length === 0) {
+        logMessage("No job listings detected in the search list!");
+        stopTurboApply();
+        return;
+      }
+      
+      logMessage(`Found ${jobCards.length} job cards. Initializing ZipRecruiter Turbo Mode...`);
+      
+      const ziprecruiter_turbo_state = {
+        active: true,
+        platform: "ZipRecruiter",
+        profile_id: profile.id,
+        profile_json: profileJsonStr,
+        limit: limit,
+        applied_count: 0,
+        current_index: 0,
+        processed_job_ids: [],
+        current_job_id: null,
+        current_job_status: "idle",
+        current_job_title: "",
+        current_job_company: ""
+      };
+      
+      await new Promise(r => chrome.storage.local.set({ ziprecruiter_turbo_state: ziprecruiter_turbo_state }, r));
+      processNextZipRecruiterJob(ziprecruiter_turbo_state, logMessage);
       return;
     }
 
@@ -1776,7 +2180,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       turboBtn.innerHTML = "<span>Launch Turbo Mode</span>";
     }
     chrome.storage.local.set({ turbo_mode_active: false });
-    chrome.storage.local.remove(["greenhouse_turbo_state"]);
+    chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state"]);
     updateWidgetUI();
   };
 

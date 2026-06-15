@@ -24,7 +24,8 @@
     "https://*.indeed.com/*",
     "https://*.greenhouse.io/*",
     "https://*.glassdoor.ca/*",
-    "https://*.glassdoor.com/*"
+    "https://*.glassdoor.com/*",
+    "https://*.ziprecruiter.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -37,7 +38,8 @@
         "https://*.indeed.com/*",
         "https://*.greenhouse.io/*",
         "https://*.glassdoor.ca/*",
-        "https://*.glassdoor.com/*"
+        "https://*.glassdoor.com/*",
+        "https://*.ziprecruiter.com/*"
       ],
       "js": [
         "common/constants.js",
@@ -46,6 +48,7 @@
         "connectors/indeed/index.js",
         "connectors/greenhouse/index.js",
         "connectors/glassdoor/index.js",
+        "connectors/ziprecruiter/index.js",
         "content.js"
       ],
       "run_at": "document_idle"
@@ -56,7 +59,8 @@
         "https://*.indeed.com/*",
         "https://*.greenhouse.io/*",
         "https://*.glassdoor.ca/*",
-        "https://*.glassdoor.com/*"
+        "https://*.glassdoor.com/*",
+        "https://*.ziprecruiter.com/*"
       ],
       "js": [
         "inject.js"
