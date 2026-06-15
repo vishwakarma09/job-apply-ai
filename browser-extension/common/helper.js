@@ -1,0 +1,192 @@
+// common/helper.js
+// Shared helper functions for AI Job Apply browser extension
+
+window.isContextValid = function() {
+  try {
+    return typeof chrome !== "undefined" && 
+           chrome.runtime && 
+           chrome.runtime.id && 
+           chrome.storage && 
+           chrome.storage.local;
+  } catch (e) {
+    return false;
+  }
+};
+
+window.fetchBackend = function(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    if (!window.isContextValid()) {
+      return reject(new Error("Extension context invalidated"));
+    }
+
+    // Safety check: Prevent fetching malformed/relative URLs which redirect to chrome-extension://invalid/
+    if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+      return reject(new Error("Invalid absolute URL: " + url));
+    }
+
+    chrome.runtime.sendMessage({
+      action: "fetchBackend",
+      url,
+      options
+    }, (response) => {
+      if (!window.isContextValid()) {
+        return reject(new Error("Extension context invalidated"));
+      }
+      if (chrome.runtime.lastError) {
+        return reject(new Error(chrome.runtime.lastError.message));
+      }
+      if (response && response.success) {
+        resolve(response.data);
+      } else {
+        reject(new Error(response ? response.error || `HTTP ${response.status}` : "Unknown proxy error"));
+      }
+    });
+  });
+};
+
+window.debugRemoteLog = function(message) {
+  try {
+    if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
+      chrome.runtime.sendMessage({
+        action: "fetchBackend",
+        url: `${window.API_DEFAULT_URL}/api/jobs/extension-logs`,
+        options: {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            level: "DEBUG",
+            message: message,
+            timestamp: new Date().toISOString(),
+            platform: "indeed"
+          })
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("debugRemoteLog failed:", e);
+  }
+};
+
+window.sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Helper function to extract text label associated with an input
+window.getLabelText = (inputEl) => {
+  if (inputEl.id) {
+    const label = document.querySelector(`label[for="${inputEl.id}"]`);
+    if (label) return label.innerText.trim();
+  }
+  const parentLabel = inputEl.closest("label");
+  if (parentLabel) return parentLabel.innerText.trim();
+  
+  const container = inputEl.closest(".fb-form-element, .jobs-easy-apply-form-section__grouping");
+  if (container) {
+    const title = container.querySelector(".artdeco-text-input--label, span, legend");
+    if (title) return title.innerText.trim();
+  }
+  return "";
+};
+
+// Helper to visually highlight unfilled required fields in the DOM
+window.highlightUnfilledFields = (unfilledFields) => {
+  unfilledFields.forEach((el) => {
+    let target = el;
+    if (el.type === 'radio') {
+      target = el.closest('fieldset') || el.parentElement;
+    } else if (el.type === 'checkbox') {
+      target = el.closest('label') || el;
+    }
+
+    if (target) {
+      target.style.transition = "all 0.3s ease";
+      target.style.border = "2px solid #ef4444";
+      target.style.borderRadius = "8px";
+      target.style.boxShadow = "0 0 0 3px rgba(239, 68, 68, 0.25)";
+      
+      if (target.tagName.toLowerCase() === 'fieldset' || target.tagName.toLowerCase() === 'div') {
+        target.style.backgroundColor = "rgba(239, 68, 68, 0.05)";
+        target.style.padding = "8px";
+      }
+    }
+  });
+
+  if (unfilledFields.length > 0) {
+    const firstEl = unfilledFields[0];
+    const scrollTarget = firstEl.type === 'radio' ? (firstEl.closest('fieldset') || firstEl) : firstEl;
+    scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+};
+
+window.isCloudflareChallenge = () => {
+  return !!(
+    document.querySelector('#challenge-running') ||
+    document.querySelector('#cf-challenge') ||
+    document.querySelector('#cf-wrapper') ||
+    document.title.includes("Just a moment...") ||
+    document.title.includes("Cloudflare") ||
+    window.location.href.includes("cdn-cgi") ||
+    (document.body && document.body.innerHTML && document.body.innerHTML.includes("cloudflare-static"))
+  );
+};
+
+window.isElementVisible = (el) => {
+  if (!el) return false;
+  const style = window.getComputedStyle(el);
+  if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity || '1') === 0) {
+    return false;
+  }
+  const rect = el.getBoundingClientRect();
+  return rect.width > 5 && rect.height > 5;
+};
+
+window.hasActiveCaptcha = () => {
+  // 1. Check for visible challenge iframes (always active/unsolved if visible)
+  const challengeIframes = document.querySelectorAll(
+    'iframe[src*="bframe"], iframe[src*="challenge"], iframe[title*="challenge" i], iframe[title*="verification" i]'
+  );
+  for (const iframe of challengeIframes) {
+    if (window.isElementVisible(iframe)) {
+      const rect = iframe.getBoundingClientRect();
+      if (rect.width > 50 && rect.height > 50) {
+        return true;
+      }
+    }
+  }
+
+  // 2. Check for visible anchor (checkbox) iframes and check if their response is empty
+  const anchorIframes = document.querySelectorAll(
+    'iframe[src*="anchor"], iframe[title*="reCAPTCHA" i], iframe[title*="hCaptcha" i]'
+  );
+  for (const iframe of anchorIframes) {
+    // Skip invisible recaptcha anchor iframes
+    if (iframe.src && iframe.src.includes("size=invisible")) {
+      continue;
+    }
+    // Skip grecaptcha badge (invisible recaptcha)
+    if (iframe.closest('.grecaptcha-badge')) {
+      continue;
+    }
+    
+    if (window.isElementVisible(iframe)) {
+      const rect = iframe.getBoundingClientRect();
+      if (rect.width > 50 && rect.height > 50) {
+        // Find the associated response textarea to see if it is solved
+        const container = iframe.closest('.g-recaptcha, .h-captcha, [class*="captcha"]') || iframe.parentElement?.parentElement;
+        let textarea = null;
+        if (container) {
+          textarea = container.querySelector('textarea[name="g-recaptcha-response"], textarea[name="h-captcha-response"]');
+        }
+        if (!textarea) {
+          // Fallback: look in the same document/shadow root
+          const root = iframe.getRootNode();
+          textarea = root.querySelector('textarea[name="g-recaptcha-response"], textarea[name="h-captcha-response"]');
+        }
+        
+        if (textarea && !textarea.value) {
+          return true; // Unsolved visible checkbox
+        }
+      }
+    }
+  }
+
+  return false;
+};

@@ -24,6 +24,10 @@
         "https://*.indeed.com/*"
       ],
       "js": [
+        "common/constants.js",
+        "common/helper.js",
+        "connectors/linkedin/index.js",
+        "connectors/indeed/index.js",
         "content.js"
       ],
       "run_at": "document_idle"
