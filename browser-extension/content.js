@@ -74,42 +74,46 @@ const debugRemoteLog = (message) => {
 // Immediate evaluation log for debugging smartapply tab loading
 debugRemoteLog("Script evaluated on: " + window.location.href);
 
-// Inject script to override window.open in main world to bypass popup blocker
-const injectWindowOpenInterceptor = () => {
-  const code = `
-    (function() {
-      const originalOpen = window.open;
-      window.open = function(url, name, specs) {
-        console.log("[AI Job Apply Intercept] window.open intercepted:", url);
-        if (url && (url.includes("smartapply.indeed.com") || url.includes("linkedin.com/checkout") || url.includes("linkedin.com/jobs") || url.includes("indeed.com/viewjob"))) {
-          window.dispatchEvent(new CustomEvent("AI_JOB_APPLY_INTERCEPTED_OPEN", { 
-            detail: { url } 
-          }));
-          return { closed: false, close: () => {} }; // Return a mock window object to avoid page errors
-        }
-        return originalOpen.apply(this, arguments);
-      };
-    })();
-  `;
-  const script = document.createElement("script");
-  script.textContent = code;
-  (document.head || document.documentElement).appendChild(script);
-  script.remove();
-};
-
 if (window.location.hostname.includes("indeed.com") || window.location.hostname.includes("linkedin.com")) {
-  injectWindowOpenInterceptor();
-  
+  let ActiveConnector = null;
   window.addEventListener("AI_JOB_APPLY_INTERCEPTED_OPEN", (event) => {
     const { url } = event.detail;
     console.log("[AI Job Apply Content Script] Received intercepted open request for url:", url);
-    if (isContextValid()) {
-      chrome.runtime.sendMessage({ action: "openTab", url }, (res) => {
+    
+    if (!isContextValid()) return;
+    
+    chrome.storage.local.get(["currently_applying_job_id"], (data) => {
+      if (!isContextValid()) return;
+      
+      let activeId = data.currently_applying_job_id;
+      if (!activeId) {
+        try {
+          if (ActiveConnector) {
+            activeId = ActiveConnector.getJobId();
+          }
+        } catch (e) {
+          console.warn("[AI Job Apply] Error calling getJobId inside intercept:", e);
+        }
+      }
+      
+      let targetUrl = url;
+      if (activeId) {
+        try {
+          const urlObj = new URL(url);
+          urlObj.searchParams.set("extensionActiveJobId", activeId);
+          targetUrl = urlObj.toString();
+          console.log("[AI Job Apply Content Script] Appended active job ID to URL:", targetUrl);
+        } catch (e) {
+          console.warn("[AI Job Apply] Failed to append job ID to intercepted URL:", e);
+        }
+      }
+      
+      chrome.runtime.sendMessage({ action: "openTab", url: targetUrl }, (res) => {
         if (chrome.runtime.lastError) {
           console.error("[AI Job Apply] Failed to open intercepted tab via background:", chrome.runtime.lastError.message);
         }
       });
-    }
+    });
   });
 
   // Also intercept programmatic click event on link tags with target="_blank"
@@ -119,11 +123,37 @@ if (window.location.hostname.includes("indeed.com") || window.location.hostname.
       // If clicked programmatically (untrusted click)
       if (!e.isTrusted) {
         e.preventDefault();
-        const url = target.href;
-        console.log("[AI Job Apply] Intercepted programmatic click on target=_blank link:", url);
-        if (isContextValid()) {
+        let url = target.href;
+        
+        if (!isContextValid()) return;
+        
+        chrome.storage.local.get(["currently_applying_job_id"], (data) => {
+          if (!isContextValid()) return;
+          
+          let activeId = data.currently_applying_job_id;
+          if (!activeId) {
+            try {
+              if (ActiveConnector) {
+                activeId = ActiveConnector.getJobId();
+              }
+            } catch (err) {
+              console.warn("[AI Job Apply] Error calling getJobId inside click intercept:", err);
+            }
+          }
+          
+          if (activeId) {
+            try {
+              const urlObj = new URL(url);
+              urlObj.searchParams.set("extensionActiveJobId", activeId);
+              url = urlObj.toString();
+            } catch (err) {
+              console.warn("[AI Job Apply] Failed to append job ID to click URL:", err);
+            }
+          }
+          
+          console.log("[AI Job Apply] Intercepted programmatic click on target=_blank link:", url);
           chrome.runtime.sendMessage({ action: "openTab", url });
-        }
+        });
       }
     }
   }, true);
@@ -867,6 +897,7 @@ const Connectors = {
         // CASE 1: Running in the original job search tab (monitors the new tab's progress)
         if (!window.location.hostname.includes("smartapply.indeed.com")) {
           const activeJobId = jobId || Connectors.Indeed.getJobId();
+          console.log("[AI Job Apply Master] automate started. activeJobId:", activeJobId);
           if (!activeJobId) {
             logMessage("No active job ID found for Indeed automation.");
             return false;
@@ -891,6 +922,18 @@ const Connectors = {
             if (!isRunning) {
               chrome.storage.local.remove([`indeed_apply_status_${activeJobId}`, `indeed_outstanding_questions_${activeJobId}`]);
               return false;
+            }
+
+            // Check if Indeed Smart Apply tab is still open (after 6 seconds of grace period)
+            if (i >= 6) {
+              const tabsCheck = await new Promise(resolve => {
+                chrome.runtime.sendMessage({ action: "checkIndeedTabs" }, resolve);
+              });
+              if (tabsCheck && tabsCheck.success && tabsCheck.tabCount === 0) {
+                logMessage("Indeed application tab was closed or blocked. Aborting monitoring.");
+                chrome.storage.local.remove([`indeed_apply_status_${activeJobId}`, `indeed_outstanding_questions_${activeJobId}`]);
+                return false;
+              }
             }
             
             const data = await new Promise(resolve => {
@@ -922,13 +965,14 @@ const Connectors = {
             await sleep(1000);
           }
           
-          logMessage("Application monitoring timed out. Completing process as fallback.");
+          logMessage("Application monitoring timed out. Aborting and queuing for later retry.");
           chrome.storage.local.remove([`indeed_apply_status_${activeJobId}`, `indeed_outstanding_questions_${activeJobId}`]);
-          return true;
+          return false;
         }
 
         // CASE 2: Running in the newly opened smartapply.indeed.com tab (performs the actual auto-fill)
-        logMessage("Indeed Smart Apply auto-fill engine started...");
+        console.log("[AI Job Apply Subtab] SmartApply engine started. activeJobId:", jobId);
+        logMessage(`Indeed Smart Apply auto-fill engine started... (Job ID: ${jobId})`);
         let previousHtml = "";
         let formIteration = 0;
         let unchangedCount = 0;
@@ -944,37 +988,141 @@ const Connectors = {
           }
         }
 
-        while (checkRunning()) {
-          const successHeading = Array.from(document.querySelectorAll('h1, h2, h3, .ia-PostApply-heading')).find(h => {
-            const text = h.innerText.toLowerCase();
-            return text.includes("submitted") || text.includes("application has been sent") || text.includes("applied");
+        // Helpers for form filling and navigation
+        const getUnfilledRequiredFields = () => {
+          const unfilled = [];
+          // Text, textarea, select
+          document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]), textarea, select').forEach(el => {
+            if (el.type !== 'hidden' && (el.required || el.getAttribute('aria-required') === 'true') && !el.value.trim()) {
+              unfilled.push(el);
+            }
+          });
+          // Checkboxes
+          document.querySelectorAll('input[type="checkbox"]').forEach(el => {
+            if ((el.required || el.getAttribute('aria-required') === 'true') && !el.checked) {
+              unfilled.push(el);
+            }
+          });
+          // Radio buttons grouped by name
+          const radioGroups = {};
+          document.querySelectorAll("input[type='radio']").forEach(radio => {
+            const name = radio.name;
+            if (name) {
+              if (!radioGroups[name]) radioGroups[name] = [];
+              radioGroups[name].push(radio);
+            }
+          });
+          for (const name in radioGroups) {
+            const group = radioGroups[name];
+            const isRequired = group.some(el => el.required || el.getAttribute('aria-required') === 'true');
+            const isChecked = group.some(el => el.checked);
+            if (isRequired && !isChecked) {
+              unfilled.push(group[0]);
+            }
+          }
+          return unfilled;
+        };
+
+        const getContinueButton = () => {
+          // Search the entire document because Indeed's continue/submit buttons 
+          // are often in a footer outside the main <form> element.
+          const searchRoot = document;
+
+          // 1. Look for submit-application
+          const submitAppBtn = searchRoot.querySelector('button[name="submit-application"], button[id*="submit-application"]');
+          if (submitAppBtn) return submitAppBtn;
+
+          // 2. Find the primary or submit button in the search root (excluding back/cancel buttons)
+          const buttons = Array.from(searchRoot.querySelectorAll('button, input[type="submit"], input[type="button"], [role="button"], a.ia-continue-button, .ia-continue-button'));
+          const activeButtons = buttons.filter(b => {
+            const text = b.innerText.toLowerCase();
+            const name = (b.name || "").toLowerCase();
+            const id = (b.id || "").toLowerCase();
+            const cls = (b.className || "").toLowerCase();
+            const style = window.getComputedStyle(b);
+            
+            if (style.display === 'none' || style.visibility === 'hidden' || b.disabled) {
+              return false;
+            }
+            
+            // Skip site-wide header, navigation, and menu buttons (but NOT form footers / form navigation)
+            const isSiteHeaderOrNav = b.closest('header, nav, [role="navigation"], .ia-Navigation, [class*="Header"]');
+            if (isSiteHeaderOrNav) {
+              // Ensure we don't skip the actual form-navigation footer inside the smartapply form
+              const isFormNav = b.closest('.ia-Form-navigation, .ia-Form-navigationButtons, [class*="Form-navigation"]');
+              if (!isFormNav) {
+                return false;
+              }
+            }
+            
+            // Skip specific known non-navigation buttons
+            if (
+              text.includes("back") || 
+              text.includes("cancel") || 
+              text.includes("close") ||
+              text.includes("clear") ||
+              text.includes("menu") ||
+              text.includes("navigation") ||
+              text.includes("account") ||
+              text.includes("report") ||
+              text.includes("issue") ||
+              text.includes("feedback") ||
+              text.includes("help") ||
+              text.includes("terms") ||
+              text.includes("privacy") ||
+              text.includes("cookie") ||
+              text.includes("options") ||
+              text.includes("preferences") ||
+              name.includes("menu") ||
+              id.includes("menu")
+            ) {
+              return false;
+            }
+            
+            return true;
           });
 
-          if (successHeading) {
-            logMessage("Application submission confirmed!");
-            if (activeJobId) {
-              await new Promise(resolve => {
-                chrome.storage.local.set({ [`indeed_apply_status_${activeJobId}`]: "success" }, resolve);
-              });
+          if (activeButtons.length > 0) {
+            // Prioritize buttons containing action keywords
+            const actionKeywords = ["continue", "next", "review", "submit", "apply"];
+            for (const keyword of actionKeywords) {
+              const matched = activeButtons.find(b => b.innerText.toLowerCase().includes(keyword));
+              if (matched) return matched;
             }
-            logMessage("Closing application tab in 3 seconds...");
-            await sleep(3000);
-            window.close();
-            return true;
-          }
 
-          const inputs = Array.from(document.querySelectorAll('input, select, textarea'));
-          if (inputs.length === 0) {
-            await sleep(1500);
-            continue;
-          }
+            // Fallback to the last submit button inside the search root (since continue is at the bottom)
+            const submitButtons = activeButtons.filter(b => b.type === 'submit');
+            if (submitButtons.length > 0) {
+              return submitButtons[submitButtons.length - 1];
+            }
 
-          const currentHtml = document.body ? document.body.innerHTML : "";
-          if (currentHtml === previousHtml) {
-            unchangedCount++;
-            if (unchangedCount >= 6) {
-              // If the HTML has not changed for 6 iterations (~9 seconds), declare a stall.
-              logMessage("Form stalled due to missing questions. Skipping job...");
+            // Ultimate fallback: the last active button
+            return activeButtons[activeButtons.length - 1];
+          }
+          return null;
+        };
+
+        let blockedCount = 0;
+
+        while (checkRunning()) {
+          // Check for CAPTCHA or Cloudflare challenge
+          const isCF = isCloudflareChallenge();
+          const hasCaptcha = hasActiveCaptcha();
+          if (isCF || hasCaptcha) {
+            blockedCount++;
+            if (isCF) {
+              logMessage("Cloudflare verification screen detected...");
+            } else {
+              logMessage("CAPTCHA detected on page! Pausing automation for manual resolution...");
+            }
+
+            const storageState = await new Promise(r => {
+              chrome.storage.local.get(["turbo_mode_active", `retry_apply_active_${activeJobId}`], r);
+            });
+            const isAutomated = storageState.turbo_mode_active || (activeJobId && storageState[`retry_apply_active_${activeJobId}`]);
+
+            if (isAutomated && blockedCount >= 10) {
+              logMessage("Automation blocked by Cloudflare/CAPTCHA for too long. Skipping job...");
               if (activeJobId) {
                 chrome.storage.local.set({
                   [`indeed_apply_status_${activeJobId}`]: "failed",
@@ -984,6 +1132,73 @@ const Connectors = {
               await sleep(1000);
               window.close();
               return false;
+            }
+
+            previousHtml = ""; // Reset to avoid unchanged HTML stall count
+            unchangedCount = 0;
+            await sleep(3000);
+            continue;
+          } else {
+            blockedCount = 0;
+          }
+
+          const successHeading = Array.from(document.querySelectorAll('h1, h2, h3, .ia-PostApply-heading')).find(h => {
+            const text = h.innerText.toLowerCase();
+            return text.includes("submitted") || text.includes("application has been sent") || text.includes("applied");
+          });
+
+          if (successHeading) {
+            logMessage("Application submission confirmed!");
+            if (activeJobId) {
+              console.log("[AI Job Apply Subtab] Setting status to success for:", activeJobId);
+              await new Promise(resolve => {
+                chrome.storage.local.set({ [`indeed_apply_status_${activeJobId}`]: "success" }, resolve);
+              });
+            } else {
+              console.error("[AI Job Apply Subtab] activeJobId is empty! Cannot set success status in storage.");
+            }
+            logMessage("Closing application tab in 3 seconds...");
+            await sleep(3000);
+            window.close();
+            return true;
+          }
+
+          const inputs = Array.from(document.querySelectorAll('input, select, textarea'));
+          if (inputs.length === 0) {
+            const nextBtn = getContinueButton();
+            if (!nextBtn) {
+              await sleep(1500);
+              continue;
+            }
+          }
+
+          const currentHtml = document.body ? document.body.innerHTML : "";
+          if (currentHtml === previousHtml) {
+            unchangedCount++;
+            if (unchangedCount >= 6) {
+              // If the HTML has not changed for 6 iterations (~9 seconds), declare a stall.
+              logMessage("Form stalled due to missing questions. Skipping job...");
+              
+              const storageState = await new Promise(r => {
+                chrome.storage.local.get(["turbo_mode_active", `retry_apply_active_${activeJobId}`], r);
+              });
+              const isAutomated = storageState.turbo_mode_active || (activeJobId && storageState[`retry_apply_active_${activeJobId}`]);
+
+              if (activeJobId) {
+                chrome.storage.local.set({
+                  [`indeed_apply_status_${activeJobId}`]: "failed",
+                  [`indeed_outstanding_questions_${activeJobId}`]: true
+                });
+              }
+
+              if (isAutomated) {
+                await sleep(1000);
+                window.close();
+                return false;
+              } else {
+                logMessage("Manual session active. Form stalled, pausing for manual intervention.");
+                return false;
+              }
             }
             logMessage(`Page content unchanged. Waiting for next step (attempt ${unchangedCount}/6)...`);
             await sleep(1500);
@@ -1029,6 +1244,14 @@ const Connectors = {
                 }
               }
               if (!valueToFill) valueToFill = "3"; // Default experience fallback
+            } else if (labelText.includes("zip") || labelText.includes("postal")) {
+              const loc = profile.city || profile.location || "";
+              const zipMatch = loc.match(/\b\d{5}(-\d{4})?\b/);
+              valueToFill = zipMatch ? zipMatch[0] : "";
+            } else if (labelText.includes("state") || labelText.includes("province") || labelText.includes("region")) {
+              const loc = profile.city || profile.location || "";
+              const stateMatch = loc.match(/,\s*([A-Z]{2})\b/);
+              valueToFill = stateMatch ? stateMatch[1] : "";
             }
 
             if (valueToFill && !input.value) {
@@ -1091,24 +1314,56 @@ const Connectors = {
 
               let targetVal = "yes";
               if (labelText.includes("sponsorship") || labelText.includes("sponsor")) {
-                targetVal = (profile.visa_sponsorship === "Yes") ? "yes" : "no";
+                targetVal = (profile.visa_sponsorship === "Yes" || String(profile.visa_sponsorship).toLowerCase().includes("yes")) ? "yes" : "no";
+              } else if (labelText.includes("authorized") || labelText.includes("legally") || labelText.includes("work in")) {
+                targetVal = (profile.work_authorization === "Yes" || String(profile.work_authorization).toLowerCase().includes("yes")) ? "yes" : "no";
+              } else if (labelText.includes("disability")) {
+                targetVal = profile.disability_status || "";
+              } else if (labelText.includes("veteran")) {
+                targetVal = profile.veteran_status || "";
+              } else if (labelText.includes("gender") || labelText.includes("sex")) {
+                targetVal = profile.gender || "";
+              } else if (labelText.includes("race") || labelText.includes("ethnicity")) {
+                targetVal = profile.ethnicity || "";
               }
 
               let checkIndex = 0;
               if (name === "resume-selection") {
+                let foundPreferred = false;
                 radios.forEach((r, idx) => {
                   const labelText = getLabelText(r).toLowerCase();
-                  if (labelText.includes("resume") || labelText.includes(".pdf") || labelText.includes(profile.first_name?.toLowerCase())) {
-                    checkIndex = idx;
+                  if (!labelText.includes("without") && !labelText.includes("no-resume")) {
+                    if (labelText.includes("resume") || labelText.includes(".pdf") || labelText.includes(".docx") || labelText.includes(profile.first_name?.toLowerCase())) {
+                      checkIndex = idx;
+                      foundPreferred = true;
+                    }
                   }
                 });
+                if (!foundPreferred && radios.length > 0) {
+                  // Fallback to the first option if no preferred resume option is found
+                  checkIndex = 0;
+                }
               } else {
+                let foundMatch = false;
                 radios.forEach((r, idx) => {
                   const labelText = getLabelText(r).toLowerCase();
-                  if (labelText === targetVal || labelText.includes(targetVal)) {
+                  const valText = r.value.toLowerCase();
+                  const tVal = targetVal.toLowerCase();
+                  if (tVal && (labelText === tVal || labelText.includes(tVal) || valText === tVal || valText.includes(tVal))) {
                     checkIndex = idx;
+                    foundMatch = true;
                   }
                 });
+
+                // Fallback to "decline to answer" or similar if no match is found for sensitive topics
+                if (!foundMatch && (labelText.includes("disability") || labelText.includes("veteran") || labelText.includes("gender") || labelText.includes("race") || labelText.includes("ethnicity"))) {
+                  radios.forEach((r, idx) => {
+                    const labelText = getLabelText(r).toLowerCase();
+                    if (labelText.includes("decline") || labelText.includes("prefer not") || labelText.includes("choose not")) {
+                      checkIndex = idx;
+                    }
+                  });
+                }
               }
 
               radios[checkIndex].checked = true;
@@ -1200,40 +1455,6 @@ const Connectors = {
           await sleep(500);
 
           // 4.5. Ask AI solver for help on unknown/unfilled required fields or complex screens
-          const getUnfilledRequiredFields = () => {
-            const unfilled = [];
-            // Text, textarea, select
-            document.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]), textarea, select').forEach(el => {
-              if (el.type !== 'hidden' && (el.required || el.getAttribute('aria-required') === 'true') && !el.value.trim()) {
-                unfilled.push(el);
-              }
-            });
-            // Checkboxes
-            document.querySelectorAll('input[type="checkbox"]').forEach(el => {
-              if ((el.required || el.getAttribute('aria-required') === 'true') && !el.checked) {
-                unfilled.push(el);
-              }
-            });
-            // Radio buttons grouped by name
-            const radioGroups = {};
-            document.querySelectorAll("input[type='radio']").forEach(radio => {
-              const name = radio.name;
-              if (name) {
-                if (!radioGroups[name]) radioGroups[name] = [];
-                radioGroups[name].push(radio);
-              }
-            });
-            for (const name in radioGroups) {
-              const group = radioGroups[name];
-              const isRequired = group.some(el => el.required || el.getAttribute('aria-required') === 'true');
-              const isChecked = group.some(el => el.checked);
-              if (isRequired && !isChecked) {
-                unfilled.push(group[0]);
-              }
-            }
-            return unfilled;
-          };
-
           const emptyRequiredFields = getUnfilledRequiredFields();
 
           if (emptyRequiredFields.length > 0 || formIteration > 5) {
@@ -1340,16 +1561,30 @@ const Connectors = {
             try {
               const finalUnfilled = getUnfilledRequiredFields();
               if (finalUnfilled.length > 0) {
-                logMessage(`Highlighting ${finalUnfilled.length} unresolved required fields. Skipping job...`);
+                const storageState = await new Promise(r => {
+                  chrome.storage.local.get(["turbo_mode_active", `retry_apply_active_${activeJobId}`], r);
+                });
+                const isAutomated = storageState.turbo_mode_active || (activeJobId && storageState[`retry_apply_active_${activeJobId}`]);
+
+                logMessage(`Highlighting ${finalUnfilled.length} unresolved required fields...`);
+                highlightUnfilledFields(finalUnfilled);
+
                 if (activeJobId) {
                   chrome.storage.local.set({
                     [`indeed_apply_status_${activeJobId}`]: "failed",
                     [`indeed_outstanding_questions_${activeJobId}`]: true
                   });
                 }
-                await sleep(1000);
-                window.close();
-                return false;
+
+                if (isAutomated) {
+                  logMessage("Automated session active. Skipping job and closing tab...");
+                  await sleep(1500);
+                  window.close();
+                  return false;
+                } else {
+                  logMessage("Manual session active. Keeping tab open. Please resolve the highlighted fields manually and proceed.");
+                  return false;
+                }
               }
             } catch (highlightErr) {
               console.warn("[AI Job Apply] Failed to highlight unresolved fields:", highlightErr);
@@ -1359,62 +1594,36 @@ const Connectors = {
           await sleep(500);
 
           // 5. Navigate to Next Step (Robust Continue Button Resolution)
-          const getContinueButton = () => {
-            const form = document.querySelector('form');
-            const searchRoot = form || document;
-
-            // 1. Look for submit-application
-            const submitAppBtn = searchRoot.querySelector('button[name="submit-application"], button[id*="submit-application"]');
-            if (submitAppBtn) return submitAppBtn;
-
-            // 2. Find the primary or submit button in the search root (excluding back/cancel buttons)
-            const buttons = Array.from(searchRoot.querySelectorAll('button'));
-            const activeButtons = buttons.filter(b => {
-              const text = b.innerText.toLowerCase();
-              const style = window.getComputedStyle(b);
-              return style.display !== 'none' && 
-                     style.visibility !== 'hidden' && 
-                     !b.disabled &&
-                     !text.includes("back") && 
-                     !text.includes("cancel") && 
-                     !text.includes("close") &&
-                     !text.includes("clear");
-            });
-
-            if (activeButtons.length > 0) {
-              // Prioritize buttons containing action keywords
-              const actionKeywords = ["continue", "next", "review", "submit", "apply"];
-              for (const keyword of actionKeywords) {
-                const matched = activeButtons.find(b => b.innerText.toLowerCase().includes(keyword));
-                if (matched) return matched;
-              }
-
-              // Fallback to the last submit button inside the search root (since continue is at the bottom)
-              const submitButtons = activeButtons.filter(b => b.type === 'submit');
-              if (submitButtons.length > 0) {
-                return submitButtons[submitButtons.length - 1];
-              }
-
-              // Ultimate fallback: the last active button
-              return activeButtons[activeButtons.length - 1];
-            }
-            return null;
-          };
-
           const nextBtn = getContinueButton();
 
           if (nextBtn) {
             if (nextBtn.disabled) {
               logMessage("Continue button is disabled due to missing questions. Skipping job...");
+              
+              const storageState = await new Promise(r => {
+                chrome.storage.local.get(["turbo_mode_active", `retry_apply_active_${activeJobId}`], r);
+              });
+              const isAutomated = storageState.turbo_mode_active || (activeJobId && storageState[`retry_apply_active_${activeJobId}`]);
+
               if (activeJobId) {
                 chrome.storage.local.set({
                   [`indeed_apply_status_${activeJobId}`]: "failed",
                   [`indeed_outstanding_questions_${activeJobId}`]: true
                 });
               }
-              await sleep(1000);
-              window.close();
-              return false;
+
+              // Apply highlighting to unfilled required fields that might be causing the disable
+              const finalUnfilled = getUnfilledRequiredFields();
+              highlightUnfilledFields(finalUnfilled);
+
+              if (isAutomated) {
+                await sleep(1500);
+                window.close();
+                return false;
+              } else {
+                logMessage("Manual session active. Button is disabled, pausing for manual intervention.");
+                return false;
+              }
             }
 
             // Auto-learn/Save current page answers before navigating
@@ -1524,11 +1733,116 @@ const getLabelText = (inputEl) => {
   return "";
 };
 
+// Helper to visually highlight unfilled required fields in the DOM
+const highlightUnfilledFields = (unfilledFields) => {
+  unfilledFields.forEach((el) => {
+    let target = el;
+    if (el.type === 'radio') {
+      target = el.closest('fieldset') || el.parentElement;
+    } else if (el.type === 'checkbox') {
+      target = el.closest('label') || el;
+    }
+
+    if (target) {
+      target.style.transition = "all 0.3s ease";
+      target.style.border = "2px solid #ef4444";
+      target.style.borderRadius = "8px";
+      target.style.boxShadow = "0 0 0 3px rgba(239, 68, 68, 0.25)";
+      
+      if (target.tagName.toLowerCase() === 'fieldset' || target.tagName.toLowerCase() === 'div') {
+        target.style.backgroundColor = "rgba(239, 68, 68, 0.05)";
+        target.style.padding = "8px";
+      }
+    }
+  });
+
+  if (unfilledFields.length > 0) {
+    const firstEl = unfilledFields[0];
+    const scrollTarget = firstEl.type === 'radio' ? (firstEl.closest('fieldset') || firstEl) : firstEl;
+    scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+};
+
+const isCloudflareChallenge = () => {
+  return !!(
+    document.querySelector('#challenge-running') ||
+    document.querySelector('#cf-challenge') ||
+    document.querySelector('#cf-wrapper') ||
+    document.title.includes("Just a moment...") ||
+    document.title.includes("Cloudflare") ||
+    window.location.href.includes("cdn-cgi") ||
+    (document.body && document.body.innerHTML && document.body.innerHTML.includes("cloudflare-static"))
+  );
+};
+
+const isElementVisible = (el) => {
+  if (!el) return false;
+  const style = window.getComputedStyle(el);
+  if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity || '1') === 0) {
+    return false;
+  }
+  const rect = el.getBoundingClientRect();
+  return rect.width > 5 && rect.height > 5;
+};
+
+const hasActiveCaptcha = () => {
+  // 1. Check for visible challenge iframes (always active/unsolved if visible)
+  const challengeIframes = document.querySelectorAll(
+    'iframe[src*="bframe"], iframe[src*="challenge"], iframe[title*="challenge" i], iframe[title*="verification" i]'
+  );
+  for (const iframe of challengeIframes) {
+    if (isElementVisible(iframe)) {
+      const rect = iframe.getBoundingClientRect();
+      if (rect.width > 50 && rect.height > 50) {
+        return true;
+      }
+    }
+  }
+
+  // 2. Check for visible anchor (checkbox) iframes and check if their response is empty
+  const anchorIframes = document.querySelectorAll(
+    'iframe[src*="anchor"], iframe[title*="reCAPTCHA" i], iframe[title*="hCaptcha" i]'
+  );
+  for (const iframe of anchorIframes) {
+    // Skip invisible recaptcha anchor iframes
+    if (iframe.src && iframe.src.includes("size=invisible")) {
+      continue;
+    }
+    // Skip grecaptcha badge (invisible recaptcha)
+    if (iframe.closest('.grecaptcha-badge')) {
+      continue;
+    }
+    
+    if (isElementVisible(iframe)) {
+      const rect = iframe.getBoundingClientRect();
+      if (rect.width > 50 && rect.height > 50) {
+        // Find the associated response textarea to see if it is solved
+        const container = iframe.closest('.g-recaptcha, .h-captcha, [class*="captcha"]') || iframe.parentElement?.parentElement;
+        let textarea = null;
+        if (container) {
+          textarea = container.querySelector('textarea[name="g-recaptcha-response"], textarea[name="h-captcha-response"]');
+        }
+        if (!textarea) {
+          // Fallback: look in the same document/shadow root
+          const root = iframe.getRootNode();
+          textarea = root.querySelector('textarea[name="g-recaptcha-response"], textarea[name="h-captcha-response"]');
+        }
+        
+        if (textarea && !textarea.value) {
+          return true; // Unsolved visible checkbox
+        }
+      }
+    }
+  }
+
+  return false;
+};
+
 // ==========================================
 // 3. MAIN WIDGET ENGINE & AUTO-APPLY LOOP
 // ==========================================
 if (window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("indeed.com")) {
-  const ActiveConnector = window.location.hostname.includes("indeed.com") ? Connectors.Indeed : Connectors.LinkedIn;
+  ActiveConnector = window.location.hostname.includes("indeed.com") ? Connectors.Indeed : Connectors.LinkedIn;
   let activeJobId = null;
   let shadowRoot = null;
   let currentJobData = null;
@@ -1586,7 +1900,21 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       chrome.storage.local.get(["token", "apiUrl", "currently_applying_job_id"], (data) => {
         const api = data.apiUrl || API_DEFAULT_URL;
         const token = data.token;
-        const jobId = data.currently_applying_job_id;
+        
+        let jobId = null;
+        try {
+          const urlObj = new URL(window.location.href);
+          jobId = urlObj.searchParams.get("extensionActiveJobId");
+        } catch (e) {}
+        
+        if (jobId) {
+          console.log("[AI Job Apply] Retaining active Job ID from URL param:", jobId);
+          chrome.storage.local.set({ currently_applying_job_id: jobId });
+        } else {
+          jobId = data.currently_applying_job_id;
+        }
+
+        console.log("[AI Job Apply] Indeed Smart Apply or Profile page detected. URL: " + window.location.href + " | Job ID: " + jobId);
         
         if (!token) {
           console.warn("[AI Job Apply] No credentials found. Auto-fill aborted.");
@@ -1639,27 +1967,71 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       return;
     }
 
-    const isJobDetailsPage = window.location.pathname.includes("/viewjob") || window.location.pathname.includes("/jobs/view") || window.location.pathname.includes("/rc/clk");
-    if (isJobDetailsPage && !isSmartApply && !isProfileResume) {
-      chrome.storage.local.get(["currently_applying_job_id"], (data) => {
+    // Check if this is a sub-tab opened during an automated apply session that has redirected to a non-apply page
+    if (window.location.hostname.includes("indeed.com")) {
+      chrome.runtime.sendMessage({ action: "checkTabRole" }, (role) => {
         if (!isContextValid()) return;
-        const activeJobId = data.currently_applying_job_id;
-        if (activeJobId) {
-          chrome.storage.local.get([`retry_apply_active_${activeJobId}`], (res) => {
-            if (!isContextValid()) return;
-            if (res[`retry_apply_active_${activeJobId}`]) {
-              console.log("[AI Job Apply] Detected active retry for Job ID:", activeJobId);
-              runRetryAutoApply(activeJobId);
-            } else {
-              startRegularScraper();
-            }
-          });
-        } else {
-          startRegularScraper();
-        }
+        const isMaster = role && role.isMaster;
+        const turboModeActive = role && role.turboModeActive;
+        
+        chrome.storage.local.get(["currently_applying_job_id"], (data) => {
+          if (!isContextValid()) return;
+          const activeJobId = data.currently_applying_job_id;
+          if (activeJobId) {
+            chrome.storage.local.get([`retry_apply_active_${activeJobId}`], (res) => {
+              if (!isContextValid()) return;
+              const isRetry = res[`retry_apply_active_${activeJobId}`];
+              const isAutomated = turboModeActive || isRetry;
+              
+              const isApplyStart = window.location.href.includes("jk=") || window.location.href.includes("applystart");
+              
+              // Only close the tab if it is NOT the master tab AND was identified as a subtab in an automated flow
+              if (isAutomated && !isMaster && !turboRunning && !isApplyStart) {
+                console.log("[AI Job Apply] Sub-tab redirected away from apply flow. Closing tab.");
+                chrome.storage.local.set({
+                  [`indeed_apply_status_${activeJobId}`]: "failed",
+                  [`retry_apply_status_${activeJobId}`]: "failed"
+                }, () => {
+                  window.close();
+                });
+                return;
+              }
+              // Otherwise proceed to normal scraper
+              continueScraperSetup(role);
+            });
+          } else {
+            continueScraperSetup(role);
+          }
+        });
       });
     } else {
-      startRegularScraper();
+      continueScraperSetup();
+    }
+
+    function continueScraperSetup(role = null) {
+      const isRetrySub = role && role.isRetrySub;
+      const isJobDetailsPage = window.location.pathname.includes("/viewjob") || window.location.pathname.includes("/jobs/view") || window.location.pathname.includes("/rc/clk") || window.location.search.includes("jk=");
+      if (isJobDetailsPage && !isSmartApply && !isProfileResume) {
+        chrome.storage.local.get(["currently_applying_job_id"], (data) => {
+          if (!isContextValid()) return;
+          const activeJobId = data.currently_applying_job_id;
+          if (activeJobId) {
+            chrome.storage.local.get([`retry_apply_active_${activeJobId}`], (res) => {
+              if (!isContextValid()) return;
+              if (res[`retry_apply_active_${activeJobId}`] && isRetrySub) {
+                console.log("[AI Job Apply] Detected active retry for Job ID in retry sub-tab:", activeJobId);
+                runRetryAutoApply(activeJobId);
+              } else {
+                startRegularScraper();
+              }
+            });
+          } else {
+            startRegularScraper();
+          }
+        });
+      } else {
+        startRegularScraper();
+      }
     }
 
     function startRegularScraper() {
@@ -2515,8 +2887,10 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     const limit = parseInt(limitSelect.value);
 
     turboRunning = true;
+    chrome.runtime.sendMessage({ action: "setMasterTab" });
     turboBtn.classList.add("danger");
     turboBtn.innerHTML = "<span>Stop Turbo Mode</span>";
+    chrome.storage.local.set({ turbo_mode_active: true });
     
     // Clear and show console
     const consoleContainer = shadowRoot.querySelector("#turbo-console-container");
@@ -2752,23 +3126,12 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           logMessage(`Database sync failed: ${err.message}`);
         }
       } else {
-        const currentJobId = ActiveConnector.getJobId();
-        const qData = await new Promise(r => chrome.storage.local.get([
-          `indeed_outstanding_questions_${currentJobId}`,
-          `retry_outstanding_questions_${currentJobId}`
-        ], r));
-        const isNeedsKG = qData[`indeed_outstanding_questions_${currentJobId}`] || qData[`retry_outstanding_questions_${currentJobId}`];
-        
-        if (isNeedsKG) {
-          logMessage("Application skipped due to unanswered questions. Saving as 'needs-knowledge-graph'...");
-          try {
-            await syncJobToBackend(jobData, profile.id, "needs-knowledge-graph");
-            logMessage("Saved to database with status 'needs-knowledge-graph'.");
-          } catch (err) {
-            logMessage(`Database sync failed: ${err.message}`);
-          }
-        } else {
-          logMessage("Application skipped or canceled.");
+        logMessage("Application failed, timed out, or was skipped. Saving as 'needs-knowledge-graph' for later retry...");
+        try {
+          await syncJobToBackend(jobData, profile.id, "needs-knowledge-graph");
+          logMessage("Saved to database with status 'needs-knowledge-graph' for future retry.");
+        } catch (err) {
+          logMessage(`Database sync failed: ${err.message}`);
         }
       }
 
@@ -2789,6 +3152,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       turboBtn.classList.remove("danger");
       turboBtn.innerHTML = "<span>Launch Turbo Mode</span>";
     }
+    chrome.storage.local.set({ turbo_mode_active: false });
     updateWidgetUI();
   };
 

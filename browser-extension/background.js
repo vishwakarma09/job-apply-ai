@@ -1,6 +1,12 @@
 // background.js
 // Service worker for AI Job Apply Assistant extension
 
+let masterTabId = null;
+const retryTabIds = new Set();
+
+// Clear any stale automation states on service worker startup
+chrome.storage.local.remove(["turbo_mode_active", "currently_applying_job_id"]);
+
 chrome.runtime.onInstalled.addListener(() => {
   console.log("[AI Job Apply Extension] Service worker installed successfully.");
   chrome.storage.local.get(["apiUrl"], (data) => {
@@ -12,19 +18,60 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (tabId === masterTabId) {
+    masterTabId = null;
+    console.log("[Background] Master tab closed.");
+  }
+  if (retryTabIds.has(tabId)) {
+    retryTabIds.delete(tabId);
+    console.log("[Background] Retry tab closed:", tabId);
+  }
+});
+
 // Message listener to proxy backend requests and bypass content-script CORS
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "setMasterTab") {
+    masterTabId = sender.tab ? sender.tab.id : null;
+    console.log("[Background] Master tab registered:", masterTabId);
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (request.action === "checkTabRole") {
+    const tabId = sender.tab ? sender.tab.id : null;
+    const isMaster = (tabId !== null && tabId === masterTabId);
+    const isRetrySub = (tabId !== null && retryTabIds.has(tabId));
+    const turboActive = (masterTabId !== null);
+    sendResponse({ success: true, isMaster, isRetrySub, turboModeActive: turboActive });
+    return true;
+  }
+
   if (request.action === "openTab") {
     const { url } = request;
     if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
       chrome.tabs.create({ url }, (tab) => {
-        sendResponse({ success: true, tabId: tab.id });
+        if (tab && tab.id) {
+          retryTabIds.add(tab.id);
+        }
+        sendResponse({ success: true, tabId: tab ? tab.id : null });
       });
       return true;
     } else {
       sendResponse({ success: false, error: "Invalid URL: " + url });
       return;
     }
+  }
+
+  if (request.action === "checkIndeedTabs") {
+    chrome.tabs.query({}, (tabs) => {
+      const indeedTabs = tabs.filter(t => {
+        const url = t.url || t.pendingUrl || "";
+        return url.includes("smartapply.indeed.com") || url.includes("profile.indeed.com");
+      });
+      sendResponse({ success: true, tabCount: indeedTabs.length });
+    });
+    return true;
   }
 
   if (request.action === "fetchBackend") {
