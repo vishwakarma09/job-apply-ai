@@ -314,6 +314,38 @@ try:
             "question": "Desired job location",
             "answer": "Toronto"
         },
+        {
+            "question": "Street Address",
+            "answer": "123 Yonge Street"
+        },
+        {
+            "question": "Address",
+            "answer": "123 Yonge Street"
+        },
+        {
+            "question": "City",
+            "answer": "Toronto"
+        },
+        {
+            "question": "State/Province",
+            "answer": "Ontario"
+        },
+        {
+            "question": "Postal/ZIP",
+            "answer": "M2J 4Y8"
+        },
+        {
+            "question": "Zip Code",
+            "answer": "M2J 4Y8"
+        },
+        {
+            "question": "Desired Pay",
+            "answer": "120000"
+        },
+        {
+            "question": "Desired salary",
+            "answer": "120000"
+        },
         # Work authorization questions
         {
             "question": "Work authorization status",

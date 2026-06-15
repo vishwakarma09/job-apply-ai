@@ -346,11 +346,25 @@ window.Connectors.ZipRecruiter = {
     async automate(profile, logMessage, checkRunning, jobId = null) {
       logMessage("Waiting for Quick Apply form/modal to load...");
       
+      const getActiveFormElement = () => {
+        const selector = "div[role='dialog'], [class*='modal'], [id*='modal'], form[class*='apply'], form[id*='apply'], .ziprecruiter-apply-container";
+        const matches = Array.from(document.querySelectorAll(selector));
+        const visibleMatches = matches.filter(el => {
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' && style.visibility !== 'hidden';
+        });
+        const withInputs = visibleMatches.filter(el => {
+          const inputs = el.querySelectorAll("input, select, textarea");
+          return inputs.length > 0;
+        });
+        return withInputs[0] || visibleMatches[0] || matches[0] || null;
+      };
+
       let modal = null;
       // Poll for up to 6 seconds
       for (let i = 0; i < 12; i++) {
         if (!checkRunning()) return false;
-        modal = document.querySelector("div[role='dialog'], [class*='modal'], [id*='modal'], form[class*='apply'], form[id*='apply'], .ziprecruiter-apply-container");
+        modal = getActiveFormElement();
         if (modal) break;
         await sleep(500);
       }
@@ -359,6 +373,21 @@ window.Connectors.ZipRecruiter = {
         logMessage("Quick Apply form not found! (Timeout waiting for form container)");
         return false;
       }
+
+      // Wait for inputs to render inside modal to prevent race condition where form is filled before fields are ready
+      let inputsRendered = false;
+      for (let i = 0; i < 10; i++) {
+        if (!checkRunning()) return false;
+        const inputs = modal.querySelectorAll("input, select, textarea");
+        if (inputs.length > 0) {
+          inputsRendered = true;
+          break;
+        }
+        await sleep(300);
+      }
+      
+      // Let the form fully settle and render any async fields
+      await sleep(1000);
 
       logMessage("ZipRecruiter Quick Apply detected. Starting auto-form filling...");
       let formIteration = 0;
@@ -376,7 +405,7 @@ window.Connectors.ZipRecruiter = {
       }
 
       const getContinueButton = () => {
-        const form = document.querySelector("div[role='dialog'], [class*='modal'], [id*='modal'], form[class*='apply'], form[id*='apply'], .ziprecruiter-apply-container");
+        const form = getActiveFormElement();
         if (!form) return null;
         const selectors = ['button[type="submit"]', 'input[type="submit"]', 'button.next-btn', 'button.continue-btn', '[class*="continue"]', '[class*="submit"]', '[class*="next"]'];
         for (const sel of selectors) {
@@ -399,7 +428,14 @@ window.Connectors.ZipRecruiter = {
       };
 
       while (checkRunning()) {
-        const successHeading = Array.from(document.querySelectorAll('h1, h2, h3, h4, p, span, div[class*="success"], div[class*="submitted"], div[id*="success"], div[id*="submitted"], .success')).find(el => {
+        // Check if modal or form is still active
+        const activeForm = getActiveFormElement();
+        if (!activeForm) {
+          logMessage("Apply form was closed.");
+          return true;
+        }
+
+        const successHeading = Array.from(activeForm.querySelectorAll('h1, h2, h3, h4, p, span, div[class*="success"], div[class*="submitted"], div[id*="success"], div[id*="submitted"], .success')).find(el => {
           if (typeof window.isElementVisible === 'function' && !window.isElementVisible(el)) {
             return false;
           }
@@ -409,13 +445,6 @@ window.Connectors.ZipRecruiter = {
 
         if (successHeading) {
           logMessage("Application submission confirmed!");
-          return true;
-        }
-
-        // Check if modal or form is still active
-        const activeForm = document.querySelector("div[role='dialog'], [class*='modal'], [id*='modal'], form[class*='apply'], form[id*='apply'], .ziprecruiter-apply-container");
-        if (!activeForm) {
-          logMessage("Apply form was closed.");
           return true;
         }
 
@@ -601,6 +630,164 @@ window.Connectors.ZipRecruiter = {
             }
           }
         });
+
+        // 5. AI Solver fallback for remaining unfilled fields
+        const getUnfilledFields = () => {
+          const unfilled = [];
+          // Text, textarea, select
+          activeForm.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]), textarea, select').forEach(el => {
+            if (el.type !== 'hidden' && !el.value.trim()) {
+              unfilled.push(el);
+            }
+          });
+          // Checkboxes (only if required or matching terms)
+          activeForm.querySelectorAll('input[type="checkbox"]').forEach(el => {
+            if ((el.required || el.getAttribute('aria-required') === 'true') && !el.checked) {
+              unfilled.push(el);
+            }
+          });
+          // Radio buttons grouped by name
+          const radioGroups = {};
+          activeForm.querySelectorAll("input[type='radio']").forEach(radio => {
+            const name = radio.name;
+            if (name) {
+              if (!radioGroups[name]) radioGroups[name] = [];
+              radioGroups[name].push(radio);
+            }
+          });
+          for (const name in radioGroups) {
+            const group = radioGroups[name];
+            const isRequired = group.some(el => el.required || el.getAttribute('aria-required') === 'true');
+            const isChecked = group.some(el => el.checked);
+            if (isRequired && !isChecked) {
+              unfilled.push(group[0]);
+            }
+          }
+          return unfilled;
+        };
+
+        const unfilledFields = getUnfilledFields();
+        if (unfilledFields.length > 0 || formIteration > 5) {
+          logMessage(`Required or unfilled fields detected (${unfilledFields.length}). Invoking AI Solver...`);
+          try {
+            const chromeData = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+            const solverApi = chromeData.apiUrl || window.API_DEFAULT_URL;
+            const solverToken = chromeData.token;
+
+            if (solverToken) {
+              const headingText = activeForm.querySelector('h1, h2, h3, h4, .title, [class*="title"]')?.innerText || "";
+              const fieldsData = Array.from(activeForm.querySelectorAll('input, select, textarea')).filter(el => el.type !== 'hidden').map(el => {
+                let label = "";
+                if (el.type === 'radio') {
+                  const legend = el.closest("fieldset")?.querySelector("legend");
+                  if (legend) label = legend.innerText.trim();
+                }
+                if (!label) {
+                  label = window.getLabelText(el);
+                }
+                return {
+                  id: el.id || '',
+                  name: el.name || '',
+                  type: el.type || el.tagName.toLowerCase(),
+                  label: label,
+                  value: el.type === 'checkbox' || el.type === 'radio' ? (el.checked ? el.value || 'on' : '') : el.value || '',
+                  required: el.required || el.getAttribute('aria-required') === 'true'
+                };
+              });
+
+              const solveResponse = await window.fetchBackend(`${solverApi}/api/jobs/solve-screen`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${solverToken}`
+                },
+                body: JSON.stringify({
+                  profile: profile,
+                  url: window.location.href,
+                  title: document.title,
+                  heading: headingText,
+                  fields: fieldsData
+                })
+              });
+
+              if (solveResponse && solveResponse.action === "fill" && solveResponse.fields) {
+                logMessage("AI Solver successfully resolved ZipRecruiter fields.");
+                solveResponse.fields.forEach(f => {
+                  let el = null;
+                  if (f.id) {
+                    try {
+                      el = activeForm.querySelector(`#${CSS.escape(f.id)}`) || document.getElementById(f.id);
+                    } catch (e) {
+                      el = document.getElementById(f.id);
+                    }
+                  }
+                  if (!el && f.name) {
+                    if (f.type === "radio") {
+                      let radios = [];
+                      try {
+                        radios = Array.from(activeForm.querySelectorAll(`input[type="radio"][name="${f.name}"]`));
+                      } catch (e) {
+                        radios = Array.from(activeForm.querySelectorAll('input[type="radio"]')).filter(r => r.name === f.name);
+                      }
+                      const targetRadio = radios.find(r => {
+                        const labelText = window.getLabelText(r).toLowerCase();
+                        const valText = r.value.toLowerCase();
+                        const fVal = String(f.value).toLowerCase();
+                        return valText === fVal || labelText === fVal || labelText.includes(fVal);
+                      }) || radios[0];
+                      if (targetRadio) {
+                        targetRadio.click();
+                        if (!targetRadio.checked) {
+                          targetRadio.checked = true;
+                          targetRadio.dispatchEvent(new Event("change", { bubbles: true }));
+                        }
+                      }
+                      return;
+                    }
+                    try {
+                      el = activeForm.querySelector(`[name="${f.name}"]`);
+                    } catch (e) {
+                      const inputs = Array.from(activeForm.querySelectorAll('[name]'));
+                      el = inputs.find(input => input.name === f.name);
+                    }
+                  }
+
+                  if (el && f.value !== undefined && f.value !== null) {
+                    if (el.type === "checkbox") {
+                      const isTrue = f.value === true || String(f.value).toLowerCase() === "true" || String(f.value).toLowerCase() === "yes" || String(f.value).toLowerCase() === "1";
+                      if (el.checked !== isTrue) {
+                        el.click();
+                        if (el.checked !== isTrue) {
+                          el.checked = isTrue;
+                          el.dispatchEvent(new Event("change", { bubbles: true }));
+                        }
+                      }
+                    } else if (el.type === "radio") {
+                      const radios = el.name ? Array.from(activeForm.querySelectorAll(`input[type="radio"][name="${el.name}"]`)) : [el];
+                      const targetRadio = radios.find(r => {
+                        const labelText = window.getLabelText(r).toLowerCase();
+                        const valText = r.value.toLowerCase();
+                        const fVal = String(f.value).toLowerCase();
+                        return valText === fVal || labelText === fVal || labelText.includes(fVal);
+                      }) || el;
+                      targetRadio.click();
+                      if (!targetRadio.checked) {
+                        targetRadio.checked = true;
+                        targetRadio.dispatchEvent(new Event("change", { bubbles: true }));
+                      }
+                    } else {
+                      el.value = f.value;
+                      el.dispatchEvent(new Event("input", { bubbles: true }));
+                      el.dispatchEvent(new Event("change", { bubbles: true }));
+                    }
+                  }
+                });
+              }
+            }
+          } catch (solverErr) {
+            console.warn("[AI Job Apply] AI Solver failed for ZipRecruiter:", solverErr);
+          }
+        }
 
         // Click Next/Continue/Submit
         let continueBtn = null;

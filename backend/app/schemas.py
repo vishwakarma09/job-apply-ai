@@ -59,6 +59,8 @@ class JobProfileBase(BaseModel):
     # Knowledge Base Auto-fill fields
     phone: Optional[str] = None
     email: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     nationality: Optional[str] = None
     visa_sponsorship: Optional[str] = None
     disability_status: Optional[str] = None

@@ -61,7 +61,7 @@ try:
     stmt = text("""
         SELECT question, answer, 1 - (question_embedding <=> :qv) AS similarity
         FROM user_knowledgebase
-        WHERE user_id = :user_id
+        WHERE user_id = :user_id AND TRIM(answer) != ''
         ORDER BY question_embedding <=> :qv
         LIMIT 1
     """)

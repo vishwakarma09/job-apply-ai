@@ -236,7 +236,7 @@ def solve_screen_endpoint(
             stmt = text("""
                 SELECT question, answer, 1 - (question_embedding <=> :qv) AS similarity
                 FROM user_knowledgebase
-                WHERE user_id = :user_id
+                WHERE user_id = :user_id AND TRIM(answer) != ''
                 ORDER BY question_embedding <=> :qv
                 LIMIT 1
             """)
@@ -247,12 +247,11 @@ def solve_screen_endpoint(
                 if row:
                     if row.similarity >= 0.60:
                         has_match = True
-                        if row.answer.strip() != "":
-                            rag_context.append({
-                                "question": row.question,
-                                "answer": row.answer,
-                                "similarity": float(row.similarity)
-                            })
+                        rag_context.append({
+                            "question": row.question,
+                            "answer": row.answer,
+                            "similarity": float(row.similarity)
+                        })
             except Exception as query_err:
                 print(f"Error querying user_knowledgebase for RAG: {query_err}")
                 

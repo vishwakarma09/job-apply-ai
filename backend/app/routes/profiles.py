@@ -155,6 +155,10 @@ def get_active_profile(
     if not profile:
         raise HTTPException(status_code=404, detail="No job profiles found")
         
+    name_parts = current_user.name.split() if current_user.name else []
+    profile.first_name = name_parts[0] if len(name_parts) > 0 else ""
+    profile.last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+    
     profile.resume_text = profile.resume.extracted_text if (profile.resume and profile.resume.extracted_text) else None
     return profile
 
