@@ -180,7 +180,10 @@ window.Connectors.Indeed = {
 
     const jobLink = cardElement.querySelector('a[data-jk]') || cardElement.querySelector('a');
     if (jobLink) {
-      jobLink.removeAttribute("target");
+      // Do not remove target attribute for Indeed to prevent full page navigation
+      // of the main search results tab in case of sponsored/external links.
+      // Indeed's SPA router will intercept the click for internal cards anyway.
+      // jobLink.removeAttribute("target");
       
       // Trigger click event sequence
       const dispatchClickEvents = (element) => {
@@ -779,7 +782,15 @@ window.Connectors.Indeed = {
             if (matchedVal !== null && matchedVal !== undefined) {
               logMessage(`Auto-filling learned answer for "${label}": "${matchedVal}"`);
               if (el.type === "checkbox") {
-                const isTrue = matchedVal === "true" || matchedVal === true || String(matchedVal).toLowerCase() === "yes" || String(matchedVal).toLowerCase() === "true" || String(matchedVal).toLowerCase() === "1";
+                const isTrue = matchedVal === true || (
+                  matchedVal !== null && 
+                  matchedVal !== undefined && 
+                  matchedVal !== "" && 
+                  String(matchedVal).toLowerCase() !== "false" && 
+                  String(matchedVal).toLowerCase() !== "no" && 
+                  String(matchedVal).toLowerCase() !== "0" && 
+                  String(matchedVal).toLowerCase() !== "none"
+                );
                 if (el.checked !== isTrue) {
                   el.click();
                   if (el.checked !== isTrue) {
@@ -897,7 +908,15 @@ window.Connectors.Indeed = {
 
                   if (el && f.value !== undefined && f.value !== null) {
                     if (el.type === "checkbox") {
-                      const isTrue = f.value === true || String(f.value).toLowerCase() === "true" || String(f.value).toLowerCase() === "yes" || String(f.value).toLowerCase() === "1";
+                      const isTrue = f.value === true || (
+                        f.value !== null && 
+                        f.value !== undefined && 
+                        f.value !== "" && 
+                        String(f.value).toLowerCase() !== "false" && 
+                        String(f.value).toLowerCase() !== "no" && 
+                        String(f.value).toLowerCase() !== "0" && 
+                        String(f.value).toLowerCase() !== "none"
+                      );
                       if (el.checked !== isTrue) {
                         el.click();
                         if (el.checked !== isTrue) {

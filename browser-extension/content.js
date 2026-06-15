@@ -12,7 +12,7 @@ if (window.location.hostname.includes("indeed.com") || window.location.hostname.
     console.log("[AI Job Apply Content Script] Received request to clear all turbo states.");
     try {
       chrome.storage.local.set({ turbo_mode_active: false });
-      chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state", "jobbank_search_state", "careerbeacon_turbo_state", "careerbeacon_search_state"]);
+      chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state", "jobbank_search_state", "careerbeacon_turbo_state", "careerbeacon_search_state", "indeed_turbo_state"]);
     } catch (e) {
       console.error("[AI Job Apply] Failed to clear turbo states:", e);
     }
@@ -224,6 +224,114 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
 
   // Poll for job changes since LinkedIn is a SPA
   const initScraper = () => {
+    if (window.location.hostname.includes("indeed.com") && !window.location.hostname.includes("smartapply.indeed.com") && !window.location.hostname.includes("profile.indeed.com")) {
+      chrome.storage.local.get(["indeed_turbo_state"], (res) => {
+        if (!isContextValid()) return;
+        const state = res.indeed_turbo_state;
+        if (state && state.active) {
+          chrome.runtime.sendMessage({ action: "checkTabRole" }, (role) => {
+            if (!isContextValid()) return;
+            let isMaster = role && role.isMaster;
+            
+            // If the service worker restarted and masterTabId is null, 
+            // the main search tab can reclaim the master role.
+            if (!isMaster && (role && !role.turboModeActive) && window.location.pathname.includes("/jobs")) {
+              chrome.runtime.sendMessage({ action: "setMasterTab" });
+              isMaster = true;
+            }
+            
+            if (isMaster) {
+              // Detect Cloudflare challenge page
+              const isCloudflare = document.title.includes("Just a moment") || 
+                                   document.querySelector("#challenge-running") || 
+                                   document.querySelector("#cf-challenge") ||
+                                   document.querySelector("#cf-bubble");
+              if (isCloudflare) {
+                console.log("[AI Job Apply] Cloudflare captcha/challenge detected. Pausing Indeed Turbo Mode auto-resume. Waiting for user to solve.");
+                return;
+              }
+              
+              const is404 = document.title.includes("Page Not Found") || document.title.includes("404");
+              
+              if (window.location.pathname.includes("/jobs") && !is404) {
+                console.log("[AI Job Apply] Resuming Indeed Turbo Mode...", state);
+                resumeIndeedTurboMode(state);
+              } else {
+                console.log("[AI Job Apply] Indeed Turbo Mode active but not on search page. Redirecting to last search URL in 3 seconds:", state.last_search_url);
+                setTimeout(() => {
+                  if (state.last_search_url) {
+                    window.location.href = state.last_search_url;
+                  } else {
+                    window.history.back();
+                  }
+                }, 3000);
+              }
+              return;
+            }
+            
+            // If it is active but this is not the master tab (i.e. a subtab), proceed to normal subtab handling
+            chrome.storage.local.get(["currently_applying_job_id"], (data) => {
+              if (!isContextValid()) return;
+              const activeJobId = data.currently_applying_job_id;
+              if (activeJobId) {
+                chrome.storage.local.get([`retry_apply_active_${activeJobId}`], (resRetry) => {
+                  if (!isContextValid()) return;
+                  const isRetry = resRetry[`retry_apply_active_${activeJobId}`];
+                  const isAutomated = (role && role.turboModeActive) || isRetry;
+                  const isApplyStart = window.location.href.includes("jk=") || window.location.href.includes("applystart");
+                  if (isAutomated && !isMaster && !turboRunning && !isApplyStart) {
+                    console.log("[AI Job Apply] Sub-tab redirected away from apply flow. Closing tab.");
+                    chrome.storage.local.set({
+                      [`indeed_apply_status_${activeJobId}`]: "failed",
+                      [`retry_apply_status_${activeJobId}`]: "failed"
+                    }, () => {
+                      window.close();
+                    });
+                    return;
+                  }
+                  continueScraperSetup(role);
+                });
+              } else {
+                continueScraperSetup(role);
+              }
+            });
+          });
+          return;
+        }
+        
+        // normal fallback when indeed_turbo_state is not active
+        chrome.runtime.sendMessage({ action: "checkTabRole" }, (role) => {
+          if (!isContextValid()) return;
+          chrome.storage.local.get(["currently_applying_job_id"], (data) => {
+            if (!isContextValid()) return;
+            const activeJobId = data.currently_applying_job_id;
+            if (activeJobId) {
+              chrome.storage.local.get([`retry_apply_active_${activeJobId}`], (resRetry) => {
+                if (!isContextValid()) return;
+                const isRetry = resRetry[`retry_apply_active_${activeJobId}`];
+                const isAutomated = (role && role.turboModeActive) || isRetry;
+                const isApplyStart = window.location.href.includes("jk=") || window.location.href.includes("applystart");
+                if (isAutomated && !(role && role.isMaster) && !turboRunning && !isApplyStart) {
+                  console.log("[AI Job Apply] Sub-tab redirected away from apply flow. Closing tab.");
+                  chrome.storage.local.set({
+                    [`indeed_apply_status_${activeJobId}`]: "failed",
+                    [`retry_apply_status_${activeJobId}`]: "failed"
+                  }, () => {
+                    window.close();
+                  });
+                  return;
+                }
+                continueScraperSetup(role);
+              });
+            } else {
+              continueScraperSetup(role);
+            }
+          });
+        });
+      });
+      return;
+    }
+
     if (window.location.hostname.includes("greenhouse.io")) {
       chrome.storage.local.get(["greenhouse_turbo_state"], (res) => {
         if (!isContextValid()) return;
@@ -1417,6 +1525,41 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
 
     return synonymMatchedCount >= requiredMatches;
+  };
+
+  const resumeIndeedTurboMode = async (state) => {
+    turboRunning = true;
+    
+    // Inject Shadow DOM and show Turbo Panel
+    if (!shadowRoot) {
+      injectShadowDOM();
+    }
+    
+    const tabDetails = shadowRoot.querySelector("#tab-btn-details");
+    const tabTurbo = shadowRoot.querySelector("#tab-btn-turbo");
+    const panelDetails = shadowRoot.querySelector("#panel-details");
+    const panelTurbo = shadowRoot.querySelector("#panel-turbo");
+    
+    if (tabDetails) tabDetails.classList.remove("active");
+    if (tabTurbo) tabTurbo.classList.add("active");
+    if (panelDetails) panelDetails.style.display = "none";
+    if (panelTurbo) panelTurbo.style.display = "block";
+    
+    const consoleContainer = shadowRoot.querySelector("#turbo-console-container");
+    const consoleBox = shadowRoot.querySelector("#turbo-console");
+    const progressSpan = shadowRoot.querySelector("#turbo-progress");
+    const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+    
+    if (consoleContainer) consoleContainer.style.display = "block";
+    if (progressSpan) progressSpan.innerText = `${state.applied_count}/${state.limit}`;
+    if (turboBtn) {
+      turboBtn.classList.add("danger");
+      turboBtn.innerHTML = "<span>Stop Turbo Mode</span>";
+      turboBtn.dataset.profileJson = state.profile_json;
+    }
+    
+    // Call startTurboApply with state
+    startTurboApply(state);
   };
 
   const resumeGreenhouseTurboMode = async (state) => {
@@ -2841,21 +2984,35 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
   // ==========================================
   // 4. TURBO MODE AUTOMATION ENGINE
   // ==========================================
-  const startTurboApply = async () => {
+  const startTurboApply = async (resumedState = null) => {
     if (!isContextValid()) return;
     
-    const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
-    const profileJsonStr = turboBtn.dataset.profileJson;
-    if (!profileJsonStr) return;
+    let profile, limit, appliedCount, processedJks;
+    
+    if (resumedState) {
+      profile = JSON.parse(resumedState.profile_json);
+      limit = resumedState.limit;
+      appliedCount = resumedState.applied_count;
+      processedJks = resumedState.processed_jks || [];
+    } else {
+      const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+      const profileJsonStr = turboBtn ? turboBtn.dataset.profileJson : null;
+      if (!profileJsonStr) return;
+      profile = JSON.parse(profileJsonStr);
+      const limitSelect = shadowRoot.querySelector("#turbo-limit");
+      limit = parseInt(limitSelect ? limitSelect.value : "10");
+      appliedCount = 0;
+      processedJks = [];
+    }
 
-    const profile = JSON.parse(profileJsonStr);
-    const limitSelect = shadowRoot.querySelector("#turbo-limit");
-    const limit = parseInt(limitSelect.value);
+    const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
 
     turboRunning = true;
     chrome.runtime.sendMessage({ action: "setMasterTab" });
-    turboBtn.classList.add("danger");
-    turboBtn.innerHTML = "<span>Stop Turbo Mode</span>";
+    if (turboBtn) {
+      turboBtn.classList.add("danger");
+      turboBtn.innerHTML = "<span>Stop Turbo Mode</span>";
+    }
     chrome.storage.local.set({ turbo_mode_active: true });
     
     // Clear and show console
@@ -2863,15 +3020,20 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     const consoleBox = shadowRoot.querySelector("#turbo-console");
     const progressSpan = shadowRoot.querySelector("#turbo-progress");
     
-    consoleContainer.style.display = "block";
-    consoleBox.innerHTML = "";
-    progressSpan.innerText = `0/${limit}`;
+    if (consoleContainer) consoleContainer.style.display = "block";
+    if (resumedState) {
+      if (consoleBox) consoleBox.innerHTML = `[${new Date().toLocaleTimeString()}] Resuming Indeed Turbo Mode...\n`;
+      if (progressSpan) progressSpan.innerText = `${appliedCount}/${limit}`;
+    } else {
+      if (consoleBox) consoleBox.innerHTML = "";
+      if (progressSpan) progressSpan.innerText = `0/${limit}`;
+    }
 
     const logMessage = (msg, level = "INFO") => {
       console.log(`[AI Job Apply Turbo] [${level}] ${msg}`);
       const timestamp = new Date().toLocaleTimeString();
-      consoleBox.innerHTML += `[${timestamp}] ${msg}\n`;
-      consoleBox.scrollTop = consoleBox.scrollHeight;
+      if (consoleBox) consoleBox.innerHTML += `[${timestamp}] ${msg}\n`;
+      if (consoleBox) consoleBox.scrollTop = consoleBox.scrollHeight;
       
       try {
         const currentJobId = ActiveConnector.getJobId();
@@ -2881,6 +3043,20 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       }
     };
 
+    const saveIndeedTurboState = async () => {
+      if (window.location.hostname.includes("indeed.com")) {
+        const stateToSave = {
+          active: true,
+          profile_id: profile.id,
+          profile_json: JSON.stringify(profile),
+          limit: limit,
+          applied_count: appliedCount,
+          last_search_url: window.location.href,
+          processed_jks: processedJks
+        };
+        await new Promise(r => chrome.storage.local.set({ indeed_turbo_state: stateToSave }, r));
+      }
+    };
 
     logMessage("Initializing Turbo Mode...");
 
@@ -3240,7 +3416,6 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
 
     logMessage(`Found ${jobCards.length} job cards on current search pane.`);
-    let appliedCount = 0;
 
     for (let i = 0; i < jobCards.length; i++) {
       if (!turboRunning || !isContextValid()) {
@@ -3254,6 +3429,26 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       }
 
       const card = jobCards[i];
+
+      // Get unique job identifier if indeed
+      let indeedJk = null;
+      if (window.location.hostname.includes("indeed.com")) {
+        indeedJk = card.getAttribute('data-jk');
+        if (!indeedJk) {
+          const hasJk = card.querySelector('[data-jk]');
+          if (hasJk) indeedJk = hasJk.getAttribute('data-jk');
+        }
+        if (!indeedJk) {
+          const link = card.querySelector('a[data-jk]');
+          if (link) indeedJk = link.getAttribute('data-jk');
+        }
+        
+        if (indeedJk && processedJks.includes(indeedJk)) {
+          logMessage(`Job key ${indeedJk} already processed in this batch. Skipping...`);
+          continue;
+        }
+      }
+
       logMessage(`--- Job Item ${i + 1}/${jobCards.length} ---`);
       
       const cardDetails = ActiveConnector.scrapeCardDetails(card);
@@ -3274,6 +3469,19 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       const jobId = ActiveConnector.getJobId();
       if (!jobId) {
         logMessage("Could not retrieve Job ID. Skipping...");
+        if (indeedJk) {
+          processedJks.push(indeedJk);
+          await saveIndeedTurboState();
+        }
+        continue;
+      }
+
+      if (jobId && processedJks.includes(jobId)) {
+        logMessage(`Job ID ${jobId} already processed. Skipping...`);
+        if (indeedJk && !processedJks.includes(indeedJk)) {
+          processedJks.push(indeedJk);
+          await saveIndeedTurboState();
+        }
         continue;
       }
 
@@ -3297,6 +3505,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         logMessage("Job already marked as 'Applied' on platform. Syncing status...");
         appliedCount++;
         progressSpan.innerText = `${appliedCount}/${limit}`;
+        if (indeedJk) processedJks.push(indeedJk);
+        if (jobId && !processedJks.includes(jobId)) processedJks.push(jobId);
+        await saveIndeedTurboState();
         try {
           await syncJobToBackend(jobData, profile.id, "Applied");
           logMessage("Database sync complete. Saved on Kanban board.");
@@ -3309,6 +3520,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       const easyApplyBtn = ActiveConnector.getEasyApplyButton();
       if (!easyApplyBtn) {
         logMessage("No 'Easy Apply' button available for this listing. Skipping...");
+        if (indeedJk) processedJks.push(indeedJk);
+        if (jobId && !processedJks.includes(jobId)) processedJks.push(jobId);
+        await saveIndeedTurboState();
         continue;
       }
 
@@ -3345,6 +3559,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         appliedCount++;
         progressSpan.innerText = `${appliedCount}/${limit}`;
         logMessage("Application submitted! Syncing details to database...");
+        if (indeedJk) processedJks.push(indeedJk);
+        if (jobId && !processedJks.includes(jobId)) processedJks.push(jobId);
+        await saveIndeedTurboState();
         
         try {
           await syncJobToBackend(jobData, profile.id, "Applied");
@@ -3354,6 +3571,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         }
       } else {
         logMessage("Application failed, timed out, or was skipped. Saving as 'needs-knowledge-graph' for later retry...");
+        if (indeedJk) processedJks.push(indeedJk);
+        if (jobId && !processedJks.includes(jobId)) processedJks.push(jobId);
+        await saveIndeedTurboState();
         try {
           await syncJobToBackend(jobData, profile.id, "needs-knowledge-graph");
           logMessage("Saved to database with status 'needs-knowledge-graph' for future retry.");
@@ -3380,7 +3600,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       turboBtn.innerHTML = "<span>Launch Turbo Mode</span>";
     }
     chrome.storage.local.set({ turbo_mode_active: false });
-    chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state", "jobbank_search_state", "careerbeacon_turbo_state", "careerbeacon_search_state"]);
+    chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state", "jobbank_search_state", "careerbeacon_turbo_state", "careerbeacon_search_state", "indeed_turbo_state"]);
     updateWidgetUI();
   };
 

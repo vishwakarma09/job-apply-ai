@@ -368,9 +368,14 @@ async function autoLaunchTurboMode(page, context) {
         await page.waitForTimeout(1000);
       }
       
-      console.log("[AutoLaunch] Clicking 'Start Turbo Apply' button!");
-      await startTurboBtn.click();
-      console.log("[AutoLaunch] Turbo mode successfully launched! Monitoring the progress...");
+      const isRunning = await startTurboBtn.evaluate(el => el.classList.contains('danger') || el.innerText.toLowerCase().includes('stop'));
+      if (isRunning) {
+        console.log("[AutoLaunch] Turbo Mode is already running/resumed. Skipping click.");
+      } else {
+        console.log("[AutoLaunch] Clicking 'Start Turbo Apply' button!");
+        await startTurboBtn.click();
+      }
+      console.log("[AutoLaunch] Turbo mode successfully launched/active! Monitoring the progress...");
     } else {
       console.log("[AutoLaunch] No job cards found to click.");
     }
