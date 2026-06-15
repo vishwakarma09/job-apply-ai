@@ -70,7 +70,7 @@ Seed the fresh database with initial plans, promocodes, mock candidates, resumes
 ```bash
 docker compose exec backend python seed.py
 ```
-*Note: This creates a test user `test@aijobapply.com` with the password `Password@123`.*
+*Note: This creates a test user `kkumar.sandeep89@gmail.com` with the password `password`.*
 
 ### 3. Verify the Installation (Integration Tests)
 Run the automated integration test suite to verify the authentication, profile uploads, cover letter tailoring, and free-trial billing bypass logic:

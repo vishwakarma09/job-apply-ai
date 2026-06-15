@@ -1,6 +1,11 @@
 // inject.js
 // Runs in MAIN world to intercept window.open calls and bypass popup blocking
 (function() {
+  if (window.location.hostname === "fr.glassdoor.ca") {
+    window.location.replace(window.location.href.replace("fr.glassdoor.ca", "www.glassdoor.ca"));
+    return;
+  }
+
   const originalOpen = window.open;
   window.open = function(url, name, specs) {
     console.log("[AI Job Apply Intercept] window.open intercepted:", url);

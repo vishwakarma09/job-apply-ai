@@ -1,0 +1,95 @@
+Sandeep Kumar
+Full Stack Developer | Toronto, Ontario, Canada | 647-395-0215 | kkumar.sandeep89@gmail.com
+
+Professional Summary
+Highly experienced Senior Full Stack Developer specializing in architecting and deploying scalable Generative AI (GenAI) solutions and microservices. Proven expertise in modern technologies including Python (FastAPI, Flask), Node.js (Nest.js), and Go, coupled with a deep understanding of full-stack development (React.js, Vue.js). Expert in GenAI, Model Context Protocol (MCP) and integrating AI/LLM technologies (OpenAI API, Gemini, FastaMCP, Prompt Engineering, RAG Architectures) to drive product growth and build high-performance backend systems. Track record of successful project delivery, leveraging strong DevOps practices (Kubernetes, AWS, CI/CD) and agile methodologies.
+
+Experience
+
+Intuit | Senior Full-stack Developer
+Toronto, Canada Area | Nov '24 - May '26
+Key Responsibilities:
+- Orchestrating technical roadmaps for AI-driven product growth, leveraging JIRA for agile experimentation and churn reduction strategies.
+- Hands-on experience in defining and creating React sub-apps for Billing systems.
+- Implementing backend features in Python and Go microservices, supporting legacy PHP frameworks.
+- Analyzing system components for security and performing risk assessments using automated and manual tools.
+- Collaborating in sprint planning, peer QA tests, and enhancing test coverage within an agile team environment.
+- Deploying features via feature flags and monitoring rollouts using Bugsnag and Splunk dashboards.
+- Developing and maintaining scalable microservices utilizing Node.js (Nest.js) for high-performance backend systems.
+- Python, FastAPI, SQLAlchemy 2.x, JWT authentication, Redis caching, and asynchronous programming.
+- Develop GenAI-based solutions (LLMs, APIs, agents). Work with MCP (Model Context Protocol) and integrations. Build scalable applications on AWS/Azure. Implement prompt engineering, RAG.
+
+Projects:
+1. AI Analytics: Built predictive models to analyze user behavior, utilizing RAG-based insights to fine-tune sales onboarding flows.
+2. Eng Enablement: Streamlined internal event systems using Flask and FastAPI, implementing automated documentation generation via LLMs.
+3. Worked with SMS team to enhance phone number lookup microservice in Go.
+
+Carlton One Engagement | Full-stack Developer (LAMP and Typescript/Nodejs, Python)
+Toronto, Canada Area | Jul '19 - May '24
+Key Responsibilities:
+- Working as Full stack developer at CarltonOne Engagement. Involved in building functional components as per the business needs. Hands-on experience in building apps using Symfony.
+- Full stack development of legacy code using laravel framework using MySQL as backend database while using services like redis, memcached, etc,. and events-based architecture to support custom client implementations for order processing, client information and business logic needs.
+- Developing modules which ingest data from various sources (rest/soap, etc,.) and calculating KPI scores for members to generate leaderboards (with tiebreakers) of various peer groups.
+- Writing unit tests (phpunit, playwright, etc,.) to ensure smoother regression and to support CI/CD pipelines.
+- Working on SPA applications build on top of microservice written in loopback.io and nest.js. The SPA applications were themselves written in Vue.js and React.js.
+- Creating SQL queries and sleuth reports for clients to look into metrics like rewards utilization, hierarchy based consumption, etc,.
+- Creating microservice using FastAPI, and writing unit tests using FastAPI test client and pytest.
+
+Projects:
+1. BMW/MINI Rewards program: Heavy customization was made for this client to ingest data from multiple sources (webservices SOAP/REST, FTP, flat files, etc.,.) to create activity data for members. This data was used to metrics on which KPI scores were calculated. These KPI scores were, in-turn, arranged as leaderboard scores to pick gold, silver and bronze group of winners.
+2. McDonald Rewards: Customization on email notifications on claim approvals. The custom flow also required changes in email notifier classes.
+3. Kart Shopping feature: This was an addition of Kart as shopping rewards provider. This included creation of custom storefront with features like Kart credit, Kart express checkout and Kart employee benefits. This feature was built on Vue.js and the corresponding REST API was written in loopback.io backend framework.
+4. Optimizing SPA application: Worked with Core development team to implement Redis based cache for API calls with TTL. This helped to reduce stress on database and Redis's microsecond responses enhanced user experience.
+5. Extending SPA unit tests: Using Vue-test-utils extended test coverage on various modules - user registration, cart, checkout, claims, etc.,.
+6. Working with React components and state (e.g. cart, currency, language, etc,.) using Redux.
+7. Setup bitbucket pipelines for custom interlink project - BMW/MINI incentives program which used Nest.js API framework (TypeScript).
+8. Point claims webservice in FastAPI. Connected with main app using nginx reverse proxy.
+9. Microservice for claim processing: Implemented microservice for claim file processing. This linked to main application via RabbitMQ. MongoDB used for claim file processing.
+
+Microware Computing & Consulting | Lead Software Developer
+Gurgaon, India | Apr '15 - Jun '19
+Key Responsibilities:
+- Led a team of developers, overseeing project timelines and technical execution.
+- Involved in complete software development life cycle. Involved in database designing using ER diagrams, UX interface decisions with client.
+- Developed functionality for Crypto buy/sell orders and implemented smart contracts via Solidity.
+- Involved in team building and mentoring junior developers.
+- Setting GIT flow and CI/CD pipelines using Jenkins. Unit testing using PHPUnit.
+- Worked on PHP frameworks Laravel, CodeIgniter, Slim and on CMS WordPress.
+- Well versed with front end technologies like MySQL, HTML, SASS, Webpack.
+- Worked with database systems like MySQL, PostgreSQL, MongoDB and MSSQL.
+- Working knowledge of Node JS, React JS, React Native, Python, Flask, GNU compiler, Makefile, C, C++, VBScript, GIS (Openlayer / GeoServer), Kafka, RabbitMQ.
+- Experience creating RESTful and SOAP services and integrating application with 3rd party API, OAuth.
+- Experience with AWS API gateway, lambda functions and serverless architecture.
+
+Projects:
+1. Technology Development Fund (DRDO): A startup fund by DRDO for academia, individual researchers and industries involved in research of defence related technologies. Built on LAMP stack, this secure platform catered to registration, Project publishing, EOI filling, Shortlisting of EOI, Filling detailed project report, Decision on DPR, Project award, Fund disbursal flow based on financial milestones, project tracking, success stories. It has a mailer system, bulk messaging, e-sign, and other modules. The project went through security audit and a security patched were added as per OWASP guidelines and other recommendations.
+about: https://www.drdo.gov.in/drdo/headquarter-directorates/about-us/directorate-technology-development-fund-dtdf
+2. Msakhi (Mobile app): An Intrahealth International initiative to help facilitate pre-natal and post-natal care of pregnant women in remote areas (with limited internet connectivity). These apps were used by ASHA workers to record vitals and vaccination records on mobile device. When these devices were back online, they transmitted entry data and that was synced to cloud. The mobile apps were developed in Android studio and the cloud web services were powered by LAMP stack.
+about: https://www.intrahealth.org/msakhi-award-winning-mobile-phone-app-frontline-health-care
+3. BRLF (Bharat Rural Livelihood Foundation): A government of India fund for planning rural livelihood projects. The project flow included CSO registration, publishing development tenders, EOI by CSO, project award and physical and financial progress planning, funds approval and tracking disbursal, email communication, dashboards at village (CSO), block and district level, user role management, etc,. The project was developed in LAMP stack (using Laravel) and deployed to AWS EC2.
+about: https://www.brlf.in/about/
+
+Kayako | Linux System Administrator
+Jalandhar, India | Jul '13 - Apr '15
+Key Responsibilities:
+- Install and troubleshoot KAYAKO HELPDESK on a variety of client servers (Linux variants and windows) over a variety of servers (apache, nginx, lighttpd, etc.)
+- Working on AWS instances, Docker instances, VPS, and various control panels.
+- Troubleshoot various aspects of email systems, database permission issues, duplicate emails, email PIPING, using PATCH command to patch product files, and tuning PHP and MySQL parameters for performance.
+- Writing bash shell scripts and integrating Kayako with new technologies; created docker images. Compile PHP and Nginx on client servers, if they are not supporting package management.
+- Complete tasks based on client / process SLA.
+About: http://www.kayako.com/
+
+Education
+CTIEMT Jalandhar | Bachelor's Degree in ECE
+May '09 - May '13
+
+Technical Skills
+AI & LLMs: OpenAI API, Gemini, FastaMCP, Prompt Engineering, RAG Architectures.
+Languages: Python (FastAPI, Flask), TypeScript/Node.js (Nest.js), PHP (Laravel, Symfony), Golang, SQL, Bash.
+Frontend & Backend: React.js, Vue.js, SASS, MySQL, PostgreSQL, MongoDB, Redis, Kafka, RabbitMQ.
+Cloud & DevOps: AWS (Lambda, EC2), Kubernetes, Docker, Jenkins, Git, Jira.
+
+Certifications
+Managing Cloud-native Applications with Kubernetes
+Neo4j Fundamentals
+DevOps Engineering on AWS

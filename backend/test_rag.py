@@ -28,7 +28,7 @@ try:
     
     # 2. Test RAG / Vector search in Postgres
     # Let's seed a test user and save answers
-    user = db.query(models.User).filter(models.User.email == "test@aijobapply.com").first()
+    user = db.query(models.User).filter(models.User.email == "kkumar.sandeep89@gmail.com").first()
     if not user:
         print("Test user not found, aborting DB test.")
         exit(0)

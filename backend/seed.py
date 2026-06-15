@@ -73,9 +73,9 @@ try:
         role="admin"
     )
     test_user = models.User(
-        name="John Doe",
-        email="test@aijobapply.com",
-        hashed_password=get_password_hash("Password@123"),
+        name="Sandeep Kumar",
+        email="kkumar.sandeep89@gmail.com",
+        hashed_password=get_password_hash("password"),
         role="user"
     )
     db.add(admin_user)
@@ -83,24 +83,41 @@ try:
     db.flush()
     
     # 5. Seed Resume & Job Profiles
+    import os
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    resume_path = os.path.join(script_dir, "..", "docs", "Sandeep_Kumar_Resume.txt")
+    if os.path.exists(resume_path):
+        with open(resume_path, "r", encoding="utf-8") as f:
+            resume_text = f.read()
+    else:
+        resume_text = (
+            "Sandeep Kumar\n"
+            "Full Stack Developer | Toronto, Ontario, Canada | 647-395-0215 | kkumar.sandeep89@gmail.com\n\n"
+            "Professional Summary\n"
+            "Highly experienced Senior Full Stack Developer specializing in architecting and deploying scalable "
+            "Generative AI (GenAI) solutions and microservices. Proven expertise in modern technologies including "
+            "Python (FastAPI, Flask), Node.js (Nest.js), and Go, coupled with a deep understanding of full-stack development "
+            "(React.js, Vue.js)."
+        )
+
     resume = models.Resume(
         user_id=test_user.id,
-        filename="John_Doe_Resume.pdf",
-        file_path="uploads/resumes/mock_john_doe_resume.pdf",
-        extracted_text="John Doe\nSenior Software Engineer\n\nExperience:\n- Senior Dev at TechCorp (2021-Present)\n- Software Eng at StartupX (2018-2021)\n\nSkills:\nNode.js, React, PostgreSQL, FastAPI, Docker, Python, JavaScript."
+        filename="Sandeep_Kumar_Resume.txt",
+        file_path="docs/Sandeep_Kumar_Resume.txt",
+        extracted_text=resume_text
     )
     db.add(resume)
     db.flush()
     
     profile1 = models.JobProfile(
         user_id=test_user.id,
-        title="Senior Software Engineer",
+        title="Senior Full Stack Developer",
         is_active=True,
         resume_id=resume.id
     )
     profile2 = models.JobProfile(
         user_id=test_user.id,
-        title="Node.js Developer",
+        title="Full Stack Developer",
         is_active=False,
         resume_id=resume.id
     )
@@ -135,10 +152,17 @@ try:
         credentials_json=None,
         status="Not Connected"
     )
+    connector5 = models.Connector(
+        user_id=test_user.id,
+        platform_name="Glassdoor",
+        credentials_json=None,
+        status="Not Connected"
+    )
     db.add(connector1)
     db.add(connector2)
     db.add(connector3)
     db.add(connector4)
+    db.add(connector5)
     db.flush()
     
     # 7. Seed Applied Jobs & Conversations

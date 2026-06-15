@@ -6,7 +6,7 @@ let ActiveConnector = null;
 // Immediate evaluation log for debugging smartapply tab loading
 debugRemoteLog("Script evaluated on: " + window.location.href);
 
-if (window.location.hostname.includes("indeed.com") || window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("greenhouse.io")) {
+if (window.location.hostname.includes("indeed.com") || window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com")) {
   // ActiveConnector is initialized in main widget engine block
   window.addEventListener("AI_JOB_APPLY_INTERCEPTED_OPEN", (event) => {
     const { url } = event.detail;
@@ -148,13 +148,15 @@ if (window.location.hostname === "localhost" || window.location.hostname === "12
 // ==========================================
 // 3. MAIN WIDGET ENGINE & AUTO-APPLY LOOP
 // ==========================================
-if (window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("indeed.com") || window.location.hostname.includes("greenhouse.io")) {
+if (window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("indeed.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com")) {
   if (window.location.hostname.includes("indeed.com")) {
     ActiveConnector = Connectors.Indeed;
   } else if (window.location.hostname.includes("linkedin.com")) {
     ActiveConnector = Connectors.LinkedIn;
   } else if (window.location.hostname.includes("greenhouse.io")) {
     ActiveConnector = Connectors.Greenhouse;
+  } else if (window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com")) {
+    ActiveConnector = Connectors.Glassdoor;
   }
   let activeJobId = null;
   let shadowRoot = null;
@@ -257,25 +259,27 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           
           if (isProfileResume) {
             // Handle Profile Resume redirect page
-            const urlParams = new URLSearchParams(window.location.search);
-            const continueUrl = urlParams.get("continue");
-            if (continueUrl) {
-              console.log("[AI Job Apply] Handling profile resume page. Looking for continue button...");
-              setTimeout(() => {
-                const continueBtn = Array.from(document.querySelectorAll('button, a')).find(el => {
-                  const text = el.innerText.toLowerCase();
-                  return text.includes("continue") || text.includes("save") || text.includes("apply") || text.includes("back to");
-                });
-                
-                if (continueBtn) {
-                  console.log("[AI Job Apply] Clicking profile continue button...");
-                  continueBtn.click();
-                } else {
+            console.log("[AI Job Apply] Handling profile resume page. Looking for continue button...");
+            setTimeout(() => {
+              const continueBtn = Array.from(document.querySelectorAll('button, a')).find(el => {
+                const text = el.innerText.toLowerCase();
+                return text.includes("continue") || text.includes("save") || text.includes("apply") || text.includes("back to");
+              });
+              
+              if (continueBtn) {
+                console.log("[AI Job Apply] Clicking profile continue button...");
+                continueBtn.click();
+              } else {
+                const urlParams = new URLSearchParams(window.location.search);
+                const continueUrl = urlParams.get("continue");
+                if (continueUrl) {
                   console.log("[AI Job Apply] Continue button not found, redirecting directly to:", continueUrl);
                   window.location.href = continueUrl;
+                } else {
+                  console.log("[AI Job Apply] Neither continue button nor continueUrl found on profile resume page.");
                 }
-              }, 1500);
-            }
+              }
+            }, 1500);
             return;
           }
 
