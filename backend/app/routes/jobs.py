@@ -84,6 +84,63 @@ def update_applied_job(
     db.refresh(job)
     return job
 
+@router.post("/generate-cover-letter", response_model=schemas.CoverLetterGenerateResponse)
+def generate_cover_letter_endpoint(
+    req: schemas.CoverLetterGenerateRequest,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    profile = db.query(models.JobProfile).filter(
+        models.JobProfile.id == req.job_profile_id,
+        models.JobProfile.user_id == current_user.id
+    ).first()
+    if not profile or not profile.resume:
+        raise HTTPException(status_code=400, detail="Active job profile does not contain an uploaded resume")
+        
+    cover_letter_content = cerebras_service.generate_cover_letter(
+        resume_text=profile.resume.extracted_text or "",
+        job_description=req.job_description
+    )
+    
+    # Generate PDF in memory using ReportLab
+    import base64
+    from io import BytesIO
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    
+    try:
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter,
+                                rightMargin=54, leftMargin=54,
+                                topMargin=54, bottomMargin=54)
+        styles = getSampleStyleSheet()
+        body_style = ParagraphStyle(
+            'CoverLetterBody',
+            parent=styles['Normal'],
+            fontSize=11,
+            leading=15,
+            spaceAfter=10
+        )
+        story = []
+        paragraphs = cover_letter_content.split("\n\n")
+        for p in paragraphs:
+            p_clean = p.strip().replace("\n", "<br/>")
+            if p_clean:
+                story.append(Paragraph(p_clean, body_style))
+                story.append(Spacer(1, 10))
+        doc.build(story)
+        buffer.seek(0)
+        pdf_bytes = buffer.getvalue()
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+    except Exception as pdf_err:
+        raise HTTPException(status_code=500, detail=f"Failed to generate cover letter PDF: {str(pdf_err)}")
+        
+    return {
+        "content": cover_letter_content,
+        "pdf_base64": pdf_base64
+    }
+
 @router.post("/{job_id}/tailor", response_model=schemas.CoverLetterResponse)
 def tailor_job_application(
     job_id: int,

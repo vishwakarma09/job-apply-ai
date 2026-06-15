@@ -96,6 +96,7 @@ class JobProfileResponse(JobProfileBase):
     user_id: int
     created_at: datetime.datetime
     updated_at: datetime.datetime
+    resume_text: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -124,6 +125,14 @@ class ConnectorResponse(ConnectorBase):
         from_attributes = True
 
 # --- CoverLetter Schemas ---
+class CoverLetterGenerateRequest(BaseModel):
+    job_profile_id: int
+    job_description: str
+
+class CoverLetterGenerateResponse(BaseModel):
+    content: str
+    pdf_base64: str
+
 class CoverLetterBase(BaseModel):
     content: str
 

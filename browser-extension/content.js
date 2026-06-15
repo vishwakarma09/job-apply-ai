@@ -203,6 +203,20 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
 
   // Poll for job changes since LinkedIn is a SPA
   const initScraper = () => {
+    if (window.location.hostname.includes("greenhouse.io")) {
+      chrome.storage.local.get(["greenhouse_turbo_state"], (res) => {
+        if (!isContextValid()) return;
+        const state = res.greenhouse_turbo_state;
+        if (state && state.active) {
+          console.log("[AI Job Apply] Resuming Greenhouse Turbo Mode...", state);
+          resumeGreenhouseTurboMode(state);
+          return;
+        }
+        continueScraperSetup();
+      });
+      return;
+    }
+
     // Check if we are running in Indeed's Smart Apply flow tab or Profile Resume page
     const isSmartApply = window.location.hostname.includes("smartapply.indeed.com");
     const isProfileResume = window.location.hostname.includes("profile.indeed.com") && window.location.pathname.includes("/resume");
@@ -1250,6 +1264,176 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
   };
 
+  const resumeGreenhouseTurboMode = async (state) => {
+    turboRunning = true;
+    
+    // Inject Shadow DOM and show Turbo Panel
+    if (!shadowRoot) {
+      injectShadowDOM();
+    }
+    
+    const tabDetails = shadowRoot.querySelector("#tab-btn-details");
+    const tabTurbo = shadowRoot.querySelector("#tab-btn-turbo");
+    const panelDetails = shadowRoot.querySelector("#panel-details");
+    const panelTurbo = shadowRoot.querySelector("#panel-turbo");
+    
+    if (tabDetails) tabDetails.classList.remove("active");
+    if (tabTurbo) tabTurbo.classList.add("active");
+    if (panelDetails) panelDetails.style.display = "none";
+    if (panelTurbo) panelTurbo.style.display = "block";
+    
+    const consoleContainer = shadowRoot.querySelector("#turbo-console-container");
+    const consoleBox = shadowRoot.querySelector("#turbo-console");
+    const progressSpan = shadowRoot.querySelector("#turbo-progress");
+    const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+    
+    if (consoleContainer) consoleContainer.style.display = "block";
+    if (progressSpan) progressSpan.innerText = `${state.applied_count}/${state.limit}`;
+    if (turboBtn) {
+      turboBtn.classList.add("danger");
+      turboBtn.innerHTML = "<span>Stop Turbo Mode</span>";
+      turboBtn.dataset.profileJson = state.profile_json;
+    }
+    
+    const logMessage = (msg, level = "INFO") => {
+      const timestamp = new Date().toLocaleTimeString();
+      if (consoleBox) {
+        consoleBox.innerHTML += `[${timestamp}] ${msg}\n`;
+        consoleBox.scrollTop = consoleBox.scrollHeight;
+      }
+      
+      try {
+        const currentJobId = ActiveConnector.getJobId();
+        remoteLog(level, msg, currentJobId);
+      } catch (err) {
+        console.warn("[AI Job Apply] Error sending remote log:", err);
+      }
+    };
+    
+    logMessage(`Resuming Turbo Mode progress: ${state.applied_count}/${state.limit}...`);
+    
+    const currentUrl = window.location.href;
+    const isConfirmationPage = currentUrl.includes("/confirmation");
+    
+    const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+    const token = storage.token;
+    const api = storage.apiUrl || API_DEFAULT_URL;
+    
+    if (isConfirmationPage) {
+      logMessage("Confirmation page detected! Job application submitted successfully.");
+      
+      state.applied_count++;
+      state.current_index++;
+      
+      await new Promise(r => chrome.storage.local.set({ greenhouse_turbo_state: state }, r));
+      navigateToNextTurboJob(state, logMessage);
+      return;
+    }
+    
+    const jobId = ActiveConnector.getJobId();
+    if (!jobId) {
+      logMessage("Could not retrieve Job ID on current page. Skipping to next job...");
+      state.current_index++;
+      await new Promise(r => chrome.storage.local.set({ greenhouse_turbo_state: state }, r));
+      navigateToNextTurboJob(state, logMessage);
+      return;
+    }
+    
+    const jobData = ActiveConnector.scrapeDetails(jobId);
+    logMessage(`Loaded job: "${jobData.title}" at "${jobData.company_name}"`);
+    
+    if (ActiveConnector.isAlreadyApplied && ActiveConnector.isAlreadyApplied()) {
+      logMessage("Job already marked as 'Applied' on platform. Skipping...");
+      state.applied_count++;
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "Applied");
+        logMessage("Synced status to Kanban board.");
+      } catch (err) {
+        logMessage(`Database sync failed: ${err.message}`);
+      }
+      
+      await new Promise(r => chrome.storage.local.set({ greenhouse_turbo_state: state }, r));
+      navigateToNextTurboJob(state, logMessage);
+      return;
+    }
+    
+    const easyApplyBtn = ActiveConnector.getEasyApplyButton();
+    if (!easyApplyBtn) {
+      logMessage("No application form or Easy Apply button available. Skipping...");
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "needs-knowledge-graph");
+      } catch (err) {}
+      
+      await new Promise(r => chrome.storage.local.set({ greenhouse_turbo_state: state }, r));
+      navigateToNextTurboJob(state, logMessage);
+      return;
+    }
+    
+    logMessage("Automating form fill...");
+    const fillSuccess = await ActiveConnector.EasyApply.automate(
+      JSON.parse(state.profile_json),
+      logMessage,
+      () => turboRunning && isContextValid()
+    );
+    
+    if (!fillSuccess) {
+      logMessage("Application failed, timed out, or was skipped.");
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "needs-knowledge-graph");
+        logMessage("Saved to database with status 'needs-knowledge-graph'.");
+      } catch (err) {}
+      
+      await new Promise(r => chrome.storage.local.set({ greenhouse_turbo_state: state }, r));
+      navigateToNextTurboJob(state, logMessage);
+    } else {
+      logMessage("Application submitted! Syncing details to database...");
+      state.applied_count++;
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "Applied");
+        logMessage("Synced status to Kanban board.");
+      } catch (err) {}
+      
+      await new Promise(r => chrome.storage.local.set({ greenhouse_turbo_state: state }, r));
+      navigateToNextTurboJob(state, logMessage);
+    }
+  };
+  
+  const navigateToNextTurboJob = async (state, logMessage) => {
+    if (state.applied_count >= state.limit || state.current_index >= state.job_urls.length) {
+      logMessage(`Turbo run finished! Applied to ${state.applied_count}/${state.limit} jobs.`);
+      
+      await new Promise(r => chrome.storage.local.remove(["greenhouse_turbo_state"], r));
+      turboRunning = false;
+      
+      const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+      if (turboBtn) {
+        turboBtn.classList.remove("danger");
+        turboBtn.innerHTML = "<span>Turbo Run Complete!</span>";
+        setTimeout(() => {
+          turboBtn.innerHTML = "<span>Launch Turbo Mode</span>";
+        }, 3000);
+      }
+      
+      logMessage("Navigating back to main jobs listing...");
+      await sleep(2500);
+      window.location.href = state.listing_page_url;
+      return;
+    }
+    
+    const nextUrl = state.job_urls[state.current_index];
+    logMessage(`Navigating to next job URL in 3 seconds: ${nextUrl}`);
+    await sleep(3000);
+    window.location.href = nextUrl;
+  };
+
   // ==========================================
   // 4. TURBO MODE AUTOMATION ENGINE
   // ==========================================
@@ -1294,6 +1478,46 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
 
 
     logMessage("Initializing Turbo Mode...");
+
+    if (window.location.hostname.includes("greenhouse.io")) {
+      const jobCards = ActiveConnector.getJobCards();
+      if (jobCards.length === 0) {
+        logMessage("No job listings detected in the search list!");
+        stopTurboApply();
+        return;
+      }
+      
+      const jobUrls = jobCards.map(card => {
+        const link = card.querySelector("a[href*='/jobs/']") || (card.tagName === "A" && card.href.includes("/jobs/") ? card : null);
+        return link ? link.href : null;
+      }).filter(url => url !== null);
+      
+      if (jobUrls.length === 0) {
+        logMessage("No job application URLs found in listing cards!");
+        stopTurboApply();
+        return;
+      }
+      
+      logMessage(`Found ${jobUrls.length} job URLs. Initializing Greenhouse Multi-Job Turbo Mode...`);
+      
+      const greenhouse_turbo_state = {
+        active: true,
+        profile_id: profile.id,
+        profile_json: profileJsonStr,
+        limit: limit,
+        applied_count: 0,
+        listing_page_url: window.location.href,
+        job_urls: jobUrls,
+        current_index: 0,
+        status: "navigating_to_job"
+      };
+      
+      await new Promise(r => chrome.storage.local.set({ greenhouse_turbo_state: greenhouse_turbo_state }, r));
+      logMessage(`Navigating to first job URL in 1.5 seconds: ${jobUrls[0]}`);
+      await sleep(1500);
+      window.location.href = jobUrls[0];
+      return;
+    }
 
     // retry phase: check database for retryable jobs with status 'needs-knowledge-graph'
     try {
@@ -1548,6 +1772,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       turboBtn.innerHTML = "<span>Launch Turbo Mode</span>";
     }
     chrome.storage.local.set({ turbo_mode_active: false });
+    chrome.storage.local.remove(["greenhouse_turbo_state"]);
     updateWidgetUI();
   };
 

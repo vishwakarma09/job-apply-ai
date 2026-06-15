@@ -472,6 +472,51 @@ window.Connectors.Greenhouse = {
           }
         }
 
+        // 1.2 Programmatic Cover Letter Upload (if input is present)
+        const coverLetterInput = form.querySelector("input[type='file'][id='cover_letter'], input[type='file'][name='cover_letter']");
+        if (coverLetterInput && profile.id && token) {
+          if (!coverLetterInput.files || coverLetterInput.files.length === 0) {
+            try {
+              const jobDescription = window.Connectors.Greenhouse.scrapeDetails().job_description || "Software Developer";
+              logMessage("Generating cover letter PDF on backend...");
+              
+              const coverLetterRes = await fetchBackend(`${api}/api/jobs/generate-cover-letter`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                  job_profile_id: profile.id,
+                  job_description: jobDescription
+                })
+              });
+              
+              if (coverLetterRes && coverLetterRes.pdf_base64) {
+                const pdfBase64 = coverLetterRes.pdf_base64;
+                const binaryString = atob(pdfBase64);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: "application/pdf" });
+                const file = new File([blob], "Cover_Letter.pdf", { type: "application/pdf" });
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                coverLetterInput.files = dt.files;
+                coverLetterInput.dispatchEvent(new Event("change", { bubbles: true }));
+                coverLetterInput.dispatchEvent(new Event("input", { bubbles: true }));
+                logMessage("Attached cover letter PDF successfully!");
+              } else {
+                logMessage("Failed to generate cover letter PDF from backend.");
+              }
+            } catch (err) {
+              logMessage(`Failed to generate/attach cover letter PDF: ${err.message}`);
+            }
+          }
+        }
+
         // 2. Fill Text, Phone, Email, Textareas, and React-Select elements
         const inputs = Array.from(form.querySelectorAll("input[type='text'], input[type='email'], input[type='tel'], input[type='search'], input:not([type]), textarea"));
         for (const input of inputs) {
@@ -747,12 +792,20 @@ window.Connectors.Greenhouse = {
                 for (const f of solveResponse.fields) {
                   let el = null;
                   if (f.id) {
-                    const escapedId = f.id.replace(/:/g, '\\:');
-                    el = form.querySelector(`#${escapedId}`) || document.getElementById(f.id);
+                    try {
+                      el = form.querySelector(`#${CSS.escape(f.id)}`) || document.getElementById(f.id);
+                    } catch (e) {
+                      el = document.getElementById(f.id);
+                    }
                   }
                   if (!el && f.name) {
                     if (f.type === "radio") {
-                      const radios = Array.from(form.querySelectorAll(`input[type="radio"][name="${f.name}"]`));
+                      let radios = [];
+                      try {
+                        radios = Array.from(form.querySelectorAll(`input[type="radio"][name="${f.name}"]`));
+                      } catch (e) {
+                        radios = Array.from(form.querySelectorAll('input[type="radio"]')).filter(r => r.name === f.name);
+                      }
                       const targetRadio = radios.find(r => {
                         const labelText = getLabelText(r).toLowerCase();
                         const valText = r.value.toLowerCase();
@@ -768,7 +821,12 @@ window.Connectors.Greenhouse = {
                       }
                       continue;
                     }
-                    el = form.querySelector(`[name="${f.name}"]`);
+                    try {
+                      el = form.querySelector(`[name="${f.name}"]`);
+                    } catch (e) {
+                      const inputs = Array.from(form.querySelectorAll('[name]'));
+                      el = inputs.find(input => input.name === f.name);
+                    }
                   }
 
                   if (el && f.value !== undefined && f.value !== null) {

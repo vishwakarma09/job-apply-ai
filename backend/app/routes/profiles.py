@@ -154,6 +154,8 @@ def get_active_profile(
         
     if not profile:
         raise HTTPException(status_code=404, detail="No job profiles found")
+        
+    profile.resume_text = profile.resume.extracted_text if (profile.resume and profile.resume.extracted_text) else None
     return profile
 
 @router.post("/active/learn")
