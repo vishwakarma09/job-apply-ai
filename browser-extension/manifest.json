@@ -5,13 +5,24 @@
   "description": "Scrape LinkedIn job listings, generate cover letters using Cerebras LLM, and track your applications.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "declarativeNetRequest"
   ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
   "host_permissions": [
     "http://localhost:8000/*",
     "http://localhost:5173/*",
     "https://*.linkedin.com/*",
-    "https://*.indeed.com/*"
+    "https://*.indeed.com/*",
+    "https://*.greenhouse.io/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -21,13 +32,15 @@
       "matches": [
         "http://localhost:5173/*",
         "https://*.linkedin.com/*",
-        "https://*.indeed.com/*"
+        "https://*.indeed.com/*",
+        "https://*.greenhouse.io/*"
       ],
       "js": [
         "common/constants.js",
         "common/helper.js",
         "connectors/linkedin/index.js",
         "connectors/indeed/index.js",
+        "connectors/greenhouse/index.js",
         "content.js"
       ],
       "run_at": "document_idle"
@@ -35,7 +48,8 @@
     {
       "matches": [
         "https://*.linkedin.com/*",
-        "https://*.indeed.com/*"
+        "https://*.indeed.com/*",
+        "https://*.greenhouse.io/*"
       ],
       "js": [
         "inject.js"

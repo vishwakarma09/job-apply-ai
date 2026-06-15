@@ -23,6 +23,7 @@ try:
     db.query(models.Order).delete()
     db.query(models.Plan).delete()
     db.query(models.Discount).delete()
+    db.query(models.UserKnowledgebase).delete()
     db.query(models.User).delete()
     db.commit()
 
@@ -128,9 +129,16 @@ try:
         credentials_json=None,
         status="Not Connected"
     )
+    connector4 = models.Connector(
+        user_id=test_user.id,
+        platform_name="Greenhouse",
+        credentials_json=None,
+        status="Not Connected"
+    )
     db.add(connector1)
     db.add(connector2)
     db.add(connector3)
+    db.add(connector4)
     db.flush()
     
     # 7. Seed Applied Jobs & Conversations

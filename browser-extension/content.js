@@ -6,7 +6,7 @@ let ActiveConnector = null;
 // Immediate evaluation log for debugging smartapply tab loading
 debugRemoteLog("Script evaluated on: " + window.location.href);
 
-if (window.location.hostname.includes("indeed.com") || window.location.hostname.includes("linkedin.com")) {
+if (window.location.hostname.includes("indeed.com") || window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("greenhouse.io")) {
   // ActiveConnector is initialized in main widget engine block
   window.addEventListener("AI_JOB_APPLY_INTERCEPTED_OPEN", (event) => {
     const { url } = event.detail;
@@ -148,8 +148,14 @@ if (window.location.hostname === "localhost" || window.location.hostname === "12
 // ==========================================
 // 3. MAIN WIDGET ENGINE & AUTO-APPLY LOOP
 // ==========================================
-if (window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("indeed.com")) {
-  ActiveConnector = window.location.hostname.includes("indeed.com") ? Connectors.Indeed : Connectors.LinkedIn;
+if (window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("indeed.com") || window.location.hostname.includes("greenhouse.io")) {
+  if (window.location.hostname.includes("indeed.com")) {
+    ActiveConnector = Connectors.Indeed;
+  } else if (window.location.hostname.includes("linkedin.com")) {
+    ActiveConnector = Connectors.LinkedIn;
+  } else if (window.location.hostname.includes("greenhouse.io")) {
+    ActiveConnector = Connectors.Greenhouse;
+  }
   let activeJobId = null;
   let shadowRoot = null;
   let currentJobData = null;
@@ -339,6 +345,13 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
 
     function startRegularScraper() {
+      if (window.location.hostname.includes("greenhouse.io")) {
+        if (!shadowRoot) {
+          activeJobId = ActiveConnector.getJobId() || "greenhouse-dashboard";
+          scrapeAndShowWidget();
+        }
+      }
+
       scraperInterval = setInterval(() => {
         if (!isContextValid()) {
           if (scraperInterval) clearInterval(scraperInterval);
@@ -363,6 +376,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
             if (!isContextValid()) return;
             scrapeAndShowWidget();
           }, 1200);
+        } else if (!jobId && window.location.hostname.includes("greenhouse.io") && !shadowRoot) {
+          activeJobId = "greenhouse-dashboard";
+          scrapeAndShowWidget();
         }
       }, 1500);
     }
@@ -746,6 +762,10 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
             Active Profile: <strong id="active-profile-name">-</strong>
           </div>
 
+          <button class="btn" id="btn-autofill-job" style="width: 100%; margin-bottom: 12px; display: none;">
+            <span>Auto Fill Application</span>
+          </button>
+
           <button class="btn" id="btn-save-job" style="width: 100%;" disabled>
             <span>Save Job & Tailor Letter</span>
           </button>
@@ -830,6 +850,39 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     const saveBtn = drawer.querySelector("#btn-save-job");
     saveBtn.addEventListener("click", () => {
       saveJobAndTailor();
+    });
+
+    const autofillBtn = drawer.querySelector("#btn-autofill-job");
+    autofillBtn.addEventListener("click", async () => {
+      const profileJsonStr = autofillBtn.dataset.profileJson;
+      if (!profileJsonStr) return;
+      const profile = JSON.parse(profileJsonStr);
+
+      autofillBtn.disabled = true;
+      autofillBtn.innerHTML = "<span>Auto Filling...</span>";
+
+      const jobId = ActiveConnector.getJobId();
+      const fillSuccess = await ActiveConnector.EasyApply.automate(
+        profile,
+        (msg) => console.log("[AI Job Apply Single]", msg),
+        () => isContextValid(),
+        jobId
+      );
+
+      autofillBtn.disabled = false;
+      if (fillSuccess) {
+        autofillBtn.innerHTML = "<span>Form Filled!</span>";
+        autofillBtn.style.background = "linear-gradient(135deg, #10b981 0%, #059669 100%)";
+        setTimeout(() => {
+          autofillBtn.innerHTML = "<span>Auto Fill Application</span>";
+          autofillBtn.style.background = "";
+        }, 3000);
+      } else {
+        autofillBtn.innerHTML = "<span>Fill Skipped/Failed</span>";
+        setTimeout(() => {
+          autofillBtn.innerHTML = "<span>Auto Fill Application</span>";
+        }, 3000);
+      }
     });
 
     const syncLink = drawer.querySelector("#btn-sync-details");
@@ -1038,6 +1091,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
 
         const statusBadge = shadowRoot.querySelector("#connection-status");
         const saveBtn = shadowRoot.querySelector("#btn-save-job");
+        const autofillBtn = shadowRoot.querySelector("#btn-autofill-job");
         const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
         const profileCard = shadowRoot.querySelector("#active-profile-card");
         const profileName = shadowRoot.querySelector("#active-profile-name");
@@ -1054,6 +1108,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           statusBadge.innerText = "Disconnected";
           saveBtn.disabled = true;
           saveBtn.innerHTML = "<span>Please Login in Dashboard</span>";
+          autofillBtn.style.display = "none";
           turboBtn.disabled = true;
           turboBtn.innerHTML = "<span>Please Login in Dashboard</span>";
           profileCard.style.display = "none";
@@ -1087,8 +1142,18 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           profileName.innerText = profile.title;
           
           saveBtn.dataset.profileId = profile.id;
+          autofillBtn.dataset.profileJson = JSON.stringify(profile);
           turboBtn.dataset.profileId = profile.id;
           turboBtn.dataset.profileJson = JSON.stringify(profile);
+
+          // Show Auto Fill button if Easy Apply is available
+          const hasEasyApply = ActiveConnector.getEasyApplyButton && ActiveConnector.getEasyApplyButton();
+          const isGreenhouse = window.location.hostname.includes("greenhouse.io") && !window.location.href.includes("my.greenhouse.io/dashboard");
+          if (hasEasyApply || isGreenhouse) {
+            autofillBtn.style.display = "block";
+          } else {
+            autofillBtn.style.display = "none";
+          }
         })
         .catch(err => {
           if (!isContextValid()) return;
@@ -1097,6 +1162,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           statusBadge.innerText = "Session Expired";
           saveBtn.disabled = true;
           saveBtn.innerHTML = "<span>Log in on localhost:5173</span>";
+          autofillBtn.style.display = "none";
           turboBtn.disabled = true;
           turboBtn.innerHTML = "<span>Log in on localhost:5173</span>";
           profileCard.style.display = "none";

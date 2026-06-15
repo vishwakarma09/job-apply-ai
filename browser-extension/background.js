@@ -88,16 +88,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(async (response) => {
         const isOk = response.ok;
         const status = response.status;
-        let data = null;
         
-        try {
-          const text = await response.text();
-          data = text ? JSON.parse(text) : null;
-        } catch (e) {
-          console.warn("[AI Job Apply Extension] Failed to parse response JSON:", e);
+        if (url.includes("/download") && isOk) {
+          const buffer = await response.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          let binary = "";
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const base64Data = btoa(binary);
+          sendResponse({ success: isOk, status, base64Data });
+        } else {
+          let data = null;
+          try {
+            const text = await response.text();
+            data = text ? JSON.parse(text) : null;
+          } catch (e) {
+            console.warn("[AI Job Apply Extension] Failed to parse response JSON:", e);
+          }
+          sendResponse({ success: isOk, status, data });
         }
-
-        sendResponse({ success: isOk, status, data });
       })
       .catch((error) => {
         console.error("[AI Job Apply Extension] Proxy fetch failed:", error);

@@ -297,3 +297,30 @@ def update_knowledgebase_entry(
     db.refresh(kb_entry)
     return kb_entry
 
+@router.get("/resumes/{resume_id}/download")
+def download_resume(
+    resume_id: int,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    resume = db.query(models.Resume).filter(
+        models.Resume.id == resume_id,
+        models.Resume.user_id == current_user.id
+    ).first()
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    
+    path = resume.file_path
+    if not os.path.exists(path):
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), path)
+        
+    if not os.path.exists(path):
+        path = os.path.join("uploads", "resumes", os.path.basename(resume.file_path))
+        
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"Resume file not found on disk at {resume.file_path}")
+        
+    from fastapi.responses import FileResponse
+    return FileResponse(path, filename=resume.filename)
+
+

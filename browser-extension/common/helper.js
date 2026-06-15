@@ -36,7 +36,11 @@ window.fetchBackend = function(url, options = {}) {
         return reject(new Error(chrome.runtime.lastError.message));
       }
       if (response && response.success) {
-        resolve(response.data);
+        if (response.base64Data) {
+          resolve({ base64Data: response.base64Data });
+        } else {
+          resolve(response.data);
+        }
       } else {
         reject(new Error(response ? response.error || `HTTP ${response.status}` : "Unknown proxy error"));
       }
@@ -86,9 +90,18 @@ window.getLabelText = (inputEl) => {
   const parentLabel = inputEl.closest("label");
   if (parentLabel) return parentLabel.innerText.trim();
   
-  const container = inputEl.closest(".fb-form-element, .jobs-easy-apply-form-section__grouping");
+  const ariaLabeledby = inputEl.getAttribute("aria-labelledby");
+  if (ariaLabeledby) {
+    const label = document.getElementById(ariaLabeledby) || document.querySelector(`#${ariaLabeledby}`);
+    if (label) return label.innerText.trim();
+  }
+
+  const ariaLabel = inputEl.getAttribute("aria-label");
+  if (ariaLabel) return ariaLabel.trim();
+
+  const container = inputEl.closest(".field, .field-wrapper, .fb-form-element, .jobs-easy-apply-form-section__grouping");
   if (container) {
-    const title = container.querySelector(".artdeco-text-input--label, span, legend");
+    const title = container.querySelector("label, .artdeco-text-input--label, span, legend");
     if (title) return title.innerText.trim();
   }
   return "";
