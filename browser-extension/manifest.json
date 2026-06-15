@@ -26,7 +26,8 @@
     "https://*.glassdoor.ca/*",
     "https://*.glassdoor.com/*",
     "https://*.ziprecruiter.com/*",
-    "https://*.randstad.ca/*"
+    "https://*.randstad.ca/*",
+    "https://*.jobbank.gc.ca/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -41,7 +42,8 @@
         "https://*.glassdoor.ca/*",
         "https://*.glassdoor.com/*",
         "https://*.ziprecruiter.com/*",
-        "https://*.randstad.ca/*"
+        "https://*.randstad.ca/*",
+        "https://*.jobbank.gc.ca/*"
       ],
       "js": [
         "common/constants.js",
@@ -52,6 +54,7 @@
         "connectors/glassdoor/index.js",
         "connectors/ziprecruiter/index.js",
         "connectors/randstad/index.js",
+        "connectors/jobbank/index.js",
         "content.js"
       ],
       "run_at": "document_idle"
@@ -64,7 +67,8 @@
         "https://*.glassdoor.ca/*",
         "https://*.glassdoor.com/*",
         "https://*.ziprecruiter.com/*",
-        "https://*.randstad.ca/*"
+        "https://*.randstad.ca/*",
+        "https://*.jobbank.gc.ca/*"
       ],
       "js": [
         "inject.js"

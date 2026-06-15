@@ -164,12 +164,19 @@ try:
         credentials_json=None,
         status="Not Connected"
     )
+    connector7 = models.Connector(
+        user_id=test_user.id,
+        platform_name="Job Bank",
+        credentials_json=None,
+        status="Not Connected"
+    )
     db.add(connector1)
     db.add(connector2)
     db.add(connector3)
     db.add(connector4)
     db.add(connector5)
     db.add(connector6)
+    db.add(connector7)
     db.flush()
     
     # 7. Seed Applied Jobs & Conversations
