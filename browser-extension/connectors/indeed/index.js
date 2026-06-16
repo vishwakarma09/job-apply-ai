@@ -527,9 +527,10 @@ window.Connectors.Indeed = {
             logMessage("Form stalled due to missing questions. Skipping job...");
             
             const storageState = await new Promise(r => {
-              chrome.storage.local.get(["turbo_mode_active", `retry_apply_active_${activeJobId}`], r);
+              chrome.storage.local.get(["turbo_mode_active", `retry_apply_active_${activeJobId}`, "single_job_simulation_active"], r);
             });
-            const isAutomated = storageState.turbo_mode_active || (activeJobId && storageState[`retry_apply_active_${activeJobId}`]);
+            const isSingleJobSimulation = storageState.single_job_simulation_active === true;
+            const isAutomated = (storageState.turbo_mode_active || (activeJobId && storageState[`retry_apply_active_${activeJobId}`])) && !isSingleJobSimulation;
 
             if (activeJobId) {
               chrome.storage.local.set({
@@ -960,9 +961,10 @@ window.Connectors.Indeed = {
             const finalUnfilled = getUnfilledRequiredFields();
             if (finalUnfilled.length > 0) {
               const storageState = await new Promise(r => {
-                chrome.storage.local.get(["turbo_mode_active", `retry_apply_active_${activeJobId}`], r);
+                chrome.storage.local.get(["turbo_mode_active", `retry_apply_active_${activeJobId}`, "single_job_simulation_active"], r);
               });
-              const isAutomated = storageState.turbo_mode_active || (activeJobId && storageState[`retry_apply_active_${activeJobId}`]);
+              const isSingleJobSimulation = storageState.single_job_simulation_active === true;
+              const isAutomated = (storageState.turbo_mode_active || (activeJobId && storageState[`retry_apply_active_${activeJobId}`])) && !isSingleJobSimulation;
 
               logMessage(`Highlighting ${finalUnfilled.length} unresolved required fields...`);
               highlightUnfilledFields(finalUnfilled);
@@ -999,9 +1001,10 @@ window.Connectors.Indeed = {
             logMessage("Continue button is disabled due to missing questions. Skipping job...");
             
             const storageState = await new Promise(r => {
-              chrome.storage.local.get(["turbo_mode_active", `retry_apply_active_${activeJobId}`], r);
+              chrome.storage.local.get(["turbo_mode_active", `retry_apply_active_${activeJobId}`, "single_job_simulation_active"], r);
             });
-            const isAutomated = storageState.turbo_mode_active || (activeJobId && storageState[`retry_apply_active_${activeJobId}`]);
+            const isSingleJobSimulation = storageState.single_job_simulation_active === true;
+            const isAutomated = (storageState.turbo_mode_active || (activeJobId && storageState[`retry_apply_active_${activeJobId}`])) && !isSingleJobSimulation;
 
             if (activeJobId) {
               chrome.storage.local.set({

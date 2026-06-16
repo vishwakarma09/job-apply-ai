@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { jobsAPI } from "../services/api";
-import { Kanban, Search, Sparkles, Filter, ChevronRight, Plus } from "lucide-react";
+import { Kanban, Search, Sparkles, Filter, ChevronRight, Plus, AlertTriangle, XCircle } from "lucide-react";
 
 const JobsKanbanPage = () => {
   const [jobs, setJobs] = useState([]);
@@ -24,11 +24,55 @@ const JobsKanbanPage = () => {
   }, []);
 
   const columns = [
-    { id: "applied", name: "Applied", color: "border-indigo-500/20" },
-    { id: "in-progress", name: "In Progress", color: "border-sky-500/20" },
-    { id: "first round", name: "First Round", color: "border-purple-500/20" },
-    { id: "second round", name: "Second Round", color: "border-fuchsia-500/20" },
-    { id: "offer letter received", name: "Offer", color: "border-emerald-500/20" }
+    { 
+      id: "needs-knowledge-graph", 
+      name: "Needs Info", 
+      color: "border-amber-500/20",
+      dotColor: "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]", 
+      badgeColor: "text-amber-300 border-amber-500/20 bg-amber-500/10"
+    },
+    { 
+      id: "applied", 
+      name: "Applied", 
+      color: "border-indigo-500/20",
+      dotColor: "bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]", 
+      badgeColor: "text-indigo-300 border-indigo-500/20 bg-indigo-500/10"
+    },
+    { 
+      id: "in-progress", 
+      name: "In Progress", 
+      color: "border-sky-500/20",
+      dotColor: "bg-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.5)]", 
+      badgeColor: "text-sky-300 border-sky-500/20 bg-sky-500/10"
+    },
+    { 
+      id: "first round", 
+      name: "First Round", 
+      color: "border-purple-500/20",
+      dotColor: "bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]", 
+      badgeColor: "text-purple-300 border-purple-500/20 bg-purple-500/10"
+    },
+    { 
+      id: "second round", 
+      name: "Second Round", 
+      color: "border-fuchsia-500/20",
+      dotColor: "bg-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.5)]", 
+      badgeColor: "text-fuchsia-300 border-fuchsia-500/20 bg-fuchsia-500/10"
+    },
+    { 
+      id: "offer letter received", 
+      name: "Offer", 
+      color: "border-emerald-500/20",
+      dotColor: "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]", 
+      badgeColor: "text-emerald-300 border-emerald-500/20 bg-emerald-500/10"
+    },
+    { 
+      id: "rejected", 
+      name: "Rejected", 
+      color: "border-rose-500/20",
+      dotColor: "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]", 
+      badgeColor: "text-rose-300 border-rose-500/20 bg-rose-500/10"
+    }
   ];
 
   const filteredJobs = jobs.filter(j => 
@@ -84,8 +128,11 @@ const JobsKanbanPage = () => {
             >
               {/* Column Header */}
               <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                <span className="text-xs font-bold text-white uppercase tracking-wider">{col.name}</span>
-                <span className="text-[10px] bg-white/5 border border-white/10 text-indigo-300 px-2 py-0.5 rounded-full font-bold">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${col.dotColor}`}></span>
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">{col.name}</span>
+                </div>
+                <span className={`text-[10px] border px-2 py-0.5 rounded-full font-bold ${col.badgeColor}`}>
                   {colJobs.length}
                 </span>
               </div>
@@ -117,6 +164,16 @@ const JobsKanbanPage = () => {
                       <span className="text-[8px] uppercase tracking-wider font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-full flex items-center gap-0.5">
                         <Sparkles size={8} /> Resume Tailored
                       </span>
+                      {job.status.toLowerCase() === "needs-knowledge-graph" && (
+                        <span className="text-[8px] uppercase tracking-wider font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                          <AlertTriangle size={8} /> Needs Info
+                        </span>
+                      )}
+                      {job.status.toLowerCase() === "rejected" && (
+                        <span className="text-[8px] uppercase tracking-wider font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                          <XCircle size={8} /> Rejected
+                        </span>
+                      )}
                     </div>
                   </Link>
                 ))}

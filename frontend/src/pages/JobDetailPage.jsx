@@ -16,6 +16,21 @@ const JobDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [tailoring, setTailoring] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [retryLoading, setRetryLoading] = useState(false);
+
+  const handleRetryApplying = () => {
+    setRetryLoading(true);
+    window.postMessage({
+      type: "AI_JOB_APPLY_RETRY_JOB",
+      jobId: job.id,
+      jobUrl: job.job_url
+    }, "*");
+    
+    setTimeout(() => {
+      setRetryLoading(false);
+      alert("Simulation tab launched! Please check the opened tab and fill in any required info. The system will learn your answers automatically.");
+    }, 2000);
+  };
 
   const fetchData = async () => {
     try {
@@ -127,21 +142,35 @@ const JobDetailPage = () => {
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5 min-w-[150px]">
-          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Application Status</label>
-          <select
-            value={job.status}
-            onChange={(e) => handleStatusChange(e.target.value)}
-            disabled={statusUpdating}
-            className="bg-black/60 border border-white/10 rounded-xl py-2 px-3 text-xs text-indigo-300 focus:outline-none focus:border-indigo-500 font-bold cursor-pointer"
-          >
-            <option value="applied">Applied</option>
-            <option value="in-progress">In Progress</option>
-            <option value="first round">First Round</option>
-            <option value="second round">Second Round</option>
-            <option value="offer letter received">Offer Received</option>
-            <option value="rejected">Rejected</option>
-          </select>
+        <div className="flex items-center gap-4 flex-wrap">
+          {job.status === "needs-knowledge-graph" && (
+            <button
+              onClick={handleRetryApplying}
+              disabled={retryLoading}
+              className="bg-amber-500 hover:bg-amber-600 text-black font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all active:scale-95 cursor-pointer self-end"
+            >
+              <Sparkles size={14} />
+              {retryLoading ? "Launching..." : "Retry Applying (Simulation)"}
+            </button>
+          )}
+
+          <div className="flex flex-col gap-1.5 min-w-[150px]">
+            <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Application Status</label>
+            <select
+              value={job.status}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              disabled={statusUpdating}
+              className="bg-black/60 border border-white/10 rounded-xl py-2 px-3 text-xs text-indigo-300 focus:outline-none focus:border-indigo-500 font-bold cursor-pointer"
+            >
+              <option value="needs-knowledge-graph">Needs Info</option>
+              <option value="applied">Applied</option>
+              <option value="in-progress">In Progress</option>
+              <option value="first round">First Round</option>
+              <option value="second round">Second Round</option>
+              <option value="offer letter received">Offer Received</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
         </div>
       </div>
 

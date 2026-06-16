@@ -17,6 +17,31 @@ if (window.location.hostname.includes("indeed.com") || window.location.hostname.
       console.error("[AI Job Apply] Failed to clear turbo states:", e);
     }
   });
+  
+  // Handle manual retry trigger from dashboard detail page via postMessage
+  window.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "AI_JOB_APPLY_RETRY_JOB") {
+      const { jobId, jobUrl } = event.data;
+      console.log("[AI Job Apply Content Script] Received retry request for job via postMessage:", jobId, jobUrl);
+      
+      if (!isContextValid()) return;
+      
+      chrome.storage.local.set({
+        currently_applying_job_id: jobId,
+        [`retry_apply_active_${jobId}`]: true,
+        single_job_simulation_active: true
+      }, () => {
+        chrome.storage.local.remove([
+          `retry_apply_status_${jobId}`,
+          `retry_outstanding_questions_${jobId}`,
+          `indeed_apply_status_${jobId}`,
+          `indeed_outstanding_questions_${jobId}`
+        ], () => {
+          chrome.runtime.sendMessage({ action: "openTab", url: jobUrl });
+        });
+      });
+    }
+  });
 
   // ActiveConnector is initialized in main widget engine block
   window.addEventListener("AI_JOB_APPLY_INTERCEPTED_OPEN", (event) => {
@@ -503,10 +528,11 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         if (!isContextValid()) return;
         const activeJobId = data.currently_applying_job_id;
         if (activeJobId) {
-          chrome.storage.local.get([`retry_apply_active_${activeJobId}`], (res) => {
+          chrome.storage.local.get([`retry_apply_active_${activeJobId}`, "single_job_simulation_active"], (res) => {
             if (!isContextValid()) return;
             const isRetry = res[`retry_apply_active_${activeJobId}`];
-            const isAutomated = turboModeActive || isRetry;
+            const isSingleJobSimulation = res.single_job_simulation_active === true;
+            const isAutomated = (turboModeActive || isRetry) && !isSingleJobSimulation;
             
             // Indeed specific closing behavior
             if (window.location.hostname.includes("indeed.com")) {
@@ -533,7 +559,102 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     });
 
     function continueScraperSetup(role = null) {
+      setupManualLearningListener();
       const isRetrySub = role && role.isRetrySub;
+      
+      function setupManualLearningListener() {
+        console.log("[AI Job Apply] Setting up manual learning listener...");
+        const captureAndSaveAnswers = async () => {
+          try {
+            const currentAnswers = {};
+            document.querySelectorAll('input, select, textarea').forEach(el => {
+              if (el.type === 'hidden' || el.type === 'password') return;
+              
+              let label = "";
+              if (el.type === 'radio') {
+                const legend = el.closest("fieldset")?.querySelector("legend");
+                if (legend) label = legend.innerText.trim();
+              }
+              if (!label) {
+                label = window.getLabelText ? window.getLabelText(el).trim() : "";
+              }
+              if (!label && el.id) {
+                try {
+                  const labelEl = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+                  if (labelEl) label = labelEl.innerText.trim();
+                } catch (e) {}
+              }
+              if (!label) return;
+              
+              let val = null;
+              if (el.type === 'checkbox') {
+                val = el.checked ? 'true' : 'false';
+              } else if (el.type === 'radio') {
+                if (el.checked) {
+                  val = (window.getLabelText ? window.getLabelText(el).trim() : "") || el.value;
+                }
+              } else if (el.tagName.toLowerCase() === 'select') {
+                if (el.selectedIndex > 0) {
+                  val = el.options[el.selectedIndex].text.trim();
+                }
+              } else {
+                if (el.value) {
+                  val = el.value.trim();
+                }
+              }
+              
+              if (val !== null && val !== undefined && val !== '') {
+                currentAnswers[label] = val;
+              }
+            });
+            
+            if (Object.keys(currentAnswers).length > 0) {
+              const chromeData = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+              const api = chromeData.apiUrl || API_DEFAULT_URL;
+              const token = chromeData.token;
+              if (token) {
+                console.log("[AI Job Apply] Manual learning: Saving current page answers to profile...", currentAnswers);
+                await fetchBackend(`${api}/api/profiles/active/learn`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                  },
+                  body: JSON.stringify({ answers: currentAnswers })
+                });
+              }
+            }
+          } catch (err) {
+            console.warn("[AI Job Apply] Global manual learning capture failed:", err);
+          }
+        };
+
+        document.addEventListener("click", (e) => {
+          const target = e.target.closest("button, input[type='submit'], [class*='btn'], [class*='button']");
+          if (target) {
+            const text = target.innerText || target.value || "";
+            const textLower = text.toLowerCase();
+            if (
+              target.type === "submit" ||
+              textLower.includes("next") ||
+              textLower.includes("submit") ||
+              textLower.includes("continue") ||
+              textLower.includes("save") ||
+              textLower.includes("apply") ||
+              textLower.includes("send")
+            ) {
+              console.log("[AI Job Apply] Submit/Next button clicked, capturing answers for learning...");
+              captureAndSaveAnswers();
+            }
+          }
+        }, { capture: true });
+        
+        document.addEventListener("submit", (e) => {
+          console.log("[AI Job Apply] Form submit event detected, capturing answers for learning...");
+          captureAndSaveAnswers();
+        }, { capture: true });
+      }
+
       if (isRetrySub) {
         chrome.storage.local.get(["currently_applying_job_id"], (data) => {
           if (!isContextValid()) return;
@@ -961,6 +1082,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       <div class="body">
         <!-- Tab 1: Single Apply -->
         <div id="panel-single">
+          <div id="simulation-status" style="display: none; font-size: 11px; color: #fbbf24; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 10px; padding: 12px; margin-bottom: 16px; line-height: 1.4; font-family: inherit;">
+            <strong>Simulation Mode:</strong> Auto-filling application. Please wait or help fill any missing fields.
+          </div>
           <div class="job-card" style="margin-bottom: 16px;">
             <span class="sync-link" id="btn-sync-details">Sync Details</span>
             <div class="job-title" id="ext-job-title">-</div>
@@ -1201,11 +1325,20 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       return;
     }
 
-    chrome.storage.local.get(["token", "apiUrl"], (data) => {
+    chrome.storage.local.get(["token", "apiUrl", "single_job_simulation_active"], (data) => {
       if (!isContextValid()) return;
       const api = data.apiUrl || API_DEFAULT_URL;
       const token = data.token;
+      const isSingleJobSimulation = data.single_job_simulation_active === true;
       if (!token) return;
+
+      // Show simulation status banner if active
+      if (isSingleJobSimulation && shadowRoot) {
+        const simStatus = shadowRoot.querySelector("#simulation-status");
+        if (simStatus) {
+          simStatus.style.display = "block";
+        }
+      }
 
       fetchBackend(`${api}/api/profiles/active`, {
         headers: { "Authorization": `Bearer ${token}` }
@@ -1216,7 +1349,20 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         if (ActiveConnector.isAlreadyApplied && ActiveConnector.isAlreadyApplied()) {
           console.log("[AI Job Apply] Job already applied on platform. Updating status to success.");
           chrome.storage.local.set({ [`retry_apply_status_${activeJobId}`]: "success" });
-          window.close();
+          if (!isSingleJobSimulation) {
+            window.close();
+          } else {
+            await updateJobStatusInBackend(activeJobId, "Applied").catch(() => {});
+            if (shadowRoot) {
+              const simStatus = shadowRoot.querySelector("#simulation-status");
+              if (simStatus) {
+                simStatus.style.color = "#34d399";
+                simStatus.style.background = "rgba(52, 211, 153, 0.08)";
+                simStatus.style.borderColor = "rgba(52, 211, 153, 0.2)";
+                simStatus.innerHTML = "<strong>Applied!</strong> Job status has been updated in your dashboard.";
+              }
+            }
+          }
           return;
         }
 
@@ -1224,7 +1370,17 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         if (!easyApplyBtn) {
           console.log("[AI Job Apply] Easy Apply button not found on retry page.");
           chrome.storage.local.set({ [`retry_apply_status_${activeJobId}`]: "failed" });
-          window.close();
+          if (!isSingleJobSimulation) {
+            window.close();
+          } else if (shadowRoot) {
+            const simStatus = shadowRoot.querySelector("#simulation-status");
+            if (simStatus) {
+              simStatus.style.color = "#f87171";
+              simStatus.style.background = "rgba(239, 68, 68, 0.08)";
+              simStatus.style.borderColor = "rgba(239, 68, 68, 0.2)";
+              simStatus.innerHTML = "<strong>Easy Apply not found:</strong> Please log in or navigate to the application modal.";
+            }
+          }
           return;
         }
 
@@ -1240,24 +1396,46 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
             status = statusData[`indeed_apply_status_${activeJobId}`];
             if (status === "success") {
               chrome.storage.local.set({ [`retry_apply_status_${activeJobId}`]: "success" });
-              window.close();
+              await updateJobStatusInBackend(activeJobId, "Applied").catch(() => {});
+              if (!isSingleJobSimulation) {
+                window.close();
+              } else if (shadowRoot) {
+                const simStatus = shadowRoot.querySelector("#simulation-status");
+                if (simStatus) {
+                  simStatus.style.color = "#34d399";
+                  simStatus.style.background = "rgba(52, 211, 153, 0.08)";
+                  simStatus.style.borderColor = "rgba(52, 211, 153, 0.2)";
+                  simStatus.innerHTML = "<strong>Success!</strong> Application submitted and status updated.";
+                }
+              }
               return;
             } else if (status === "failed") {
               chrome.storage.local.set({ [`retry_apply_status_${activeJobId}`]: "failed" });
-              window.close();
+              if (!isSingleJobSimulation) {
+                window.close();
+              }
               return;
             } else {
               const qData = await new Promise(r => chrome.storage.local.get([`indeed_outstanding_questions_${activeJobId}`], r));
               if (qData[`indeed_outstanding_questions_${activeJobId}`]) {
                 chrome.storage.local.set({ [`retry_apply_status_${activeJobId}`]: "needs-knowledge-graph" });
-                window.close();
+                if (!isSingleJobSimulation) {
+                  window.close();
+                } else if (shadowRoot) {
+                  const simStatus = shadowRoot.querySelector("#simulation-status");
+                  if (simStatus) {
+                    simStatus.innerHTML = "<strong>Needs Info:</strong> Please answer the employer questions. Click next/submit to let the AI learn your answers.";
+                  }
+                }
                 return;
               }
             }
             await sleep(1000);
           }
           chrome.storage.local.set({ [`retry_apply_status_${activeJobId}`]: "failed" });
-          window.close();
+          if (!isSingleJobSimulation) {
+            window.close();
+          }
         } else {
           const fillSuccess = await ActiveConnector.EasyApply.automate(
             profile,
@@ -1270,16 +1448,45 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
 
           if (fillSuccess) {
             chrome.storage.local.set({ [`retry_apply_status_${activeJobId}`]: "success" });
+            await updateJobStatusInBackend(activeJobId, "Applied").catch(() => {});
+            if (!isSingleJobSimulation) {
+              window.close();
+            } else if (shadowRoot) {
+              const simStatus = shadowRoot.querySelector("#simulation-status");
+              if (simStatus) {
+                simStatus.style.color = "#34d399";
+                simStatus.style.background = "rgba(52, 211, 153, 0.08)";
+                simStatus.style.borderColor = "rgba(52, 211, 153, 0.2)";
+                simStatus.innerHTML = "<strong>Success!</strong> Application submitted and status updated.";
+              }
+            }
           } else {
             const qData = await new Promise(r => chrome.storage.local.get([`retry_outstanding_questions_${activeJobId}`], r));
             if (qData[`retry_outstanding_questions_${activeJobId}`]) {
               chrome.storage.local.set({ [`retry_apply_status_${activeJobId}`]: "needs-knowledge-graph" });
+              if (!isSingleJobSimulation) {
+                window.close();
+              } else if (shadowRoot) {
+                const simStatus = shadowRoot.querySelector("#simulation-status");
+                if (simStatus) {
+                  simStatus.innerHTML = "<strong>Needs Info:</strong> Please answer any outstanding questions. Click next/submit to let the AI learn your answers.";
+                }
+              }
             } else {
               chrome.storage.local.set({ [`retry_apply_status_${activeJobId}`]: "failed" });
+              if (!isSingleJobSimulation) {
+                window.close();
+              } else if (shadowRoot) {
+                const simStatus = shadowRoot.querySelector("#simulation-status");
+                if (simStatus) {
+                  simStatus.style.color = "#f87171";
+                  simStatus.style.background = "rgba(239, 68, 68, 0.08)";
+                  simStatus.style.borderColor = "rgba(239, 68, 68, 0.2)";
+                  simStatus.innerHTML = "<strong>Failed:</strong> Auto-fill automation failed. Please proceed manually.";
+                }
+              }
             }
           }
-          await sleep(1500);
-          window.close();
         }
       });
     });
