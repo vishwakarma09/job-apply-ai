@@ -117,6 +117,9 @@ setTimeout(async () => {
       console.log("[AutoLogin] Localhost auth setup failed/skipped:", e.message);
     }
 
+    console.log("Clearing browser cookies to force login sequence...");
+    await context.clearCookies().catch(err => console.log("Failed to clear cookies:", err.message));
+
     console.log("Navigating to ZipRecruiter Sign-In page...");
     await page.goto('https://www.ziprecruiter.com/login?realm=jobseeker', { waitUntil: 'domcontentloaded' }).catch(e => {
       console.log("Navigation warning:", e.message);
