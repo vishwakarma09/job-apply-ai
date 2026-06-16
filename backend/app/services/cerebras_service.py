@@ -133,5 +133,83 @@ def solve_screen(profile_data: dict, url: str, title: str, heading: str, fields:
             else:
                 raise ValueError(f"Cerebras API returned status {response.status_code}: {response.text}")
     except Exception as e:
-        print(f"Cerebras solve_screen failed: {str(e)}. Using fallback empty action.")
+        print(f"Cerebras solve_screen failed: {str(e)}. Attempting rule-based/RAG fallback...")
+        try:
+            fallback_fields = []
+            for f in fields:
+                f_label = (f.get("label") or "").strip().lower()
+                f_name = (f.get("name") or "").strip().lower()
+                
+                matched_val = None
+                
+                # 1. Try RAG context match
+                if rag_context:
+                    for entry in rag_context:
+                        q_clean = entry["question"].strip().lower()
+                        if f_label and (f_label == q_clean or f_label in q_clean or q_clean in f_label):
+                            matched_val = entry["answer"]
+                            break
+                        if f_name and (f_name == q_clean or f_name in q_clean or q_clean in f_name):
+                            matched_val = entry["answer"]
+                            break
+                
+                # 2. Try profile fields fallback
+                if matched_val is None:
+                    if "phone" in f_label or "mobile" in f_label or "phone" in f_name:
+                        matched_val = profile_data.get("phone")
+                    elif "email" in f_label or "email" in f_name:
+                        matched_val = profile_data.get("email")
+                    elif "first name" in f_label or "given name" in f_label or "first_name" in f_name:
+                        matched_val = profile_data.get("first_name")
+                    elif "last name" in f_label or "family name" in f_label or "last_name" in f_name:
+                        matched_val = profile_data.get("last_name")
+                    elif "city" in f_label or "city" in f_name:
+                        matched_val = profile_data.get("city")
+                    elif "location" in f_label or "location" in f_name:
+                        matched_val = profile_data.get("location")
+                    elif "state" in f_label or "province" in f_label or "state" in f_name:
+                        # Try to get state from location or default to Ontario
+                        loc = profile_data.get("location") or ""
+                        if "ontario" in loc.lower() or "on" in loc.split():
+                            matched_val = "Ontario"
+                        else:
+                            matched_val = profile_data.get("state") or "Ontario"
+                    elif "street" in f_label or "address" in f_label or "address" in f_name:
+                        matched_val = profile_data.get("street_address") or "123 Yonge Street"
+                    elif "postal" in f_label or "zip" in f_label or "zip" in f_name:
+                        matched_val = "M2J 4Y8"
+                    elif "salary" in f_label or "pay" in f_label or "compensation" in f_label:
+                        matched_val = "120000"
+                    elif "sponsorship" in f_label or "sponsor" in f_label or "sponsorship" in f_name:
+                        matched_val = profile_data.get("visa_sponsorship") or "No"
+                    elif "authorized" in f_label or "legally" in f_label or "work in" in f_label or "authorized" in f_name:
+                        matched_val = profile_data.get("work_authorization") or "Yes"
+                
+                if matched_val is not None:
+                    fallback_fields.append({
+                        "id": f.get("id"),
+                        "name": f.get("name"),
+                        "type": f.get("type"),
+                        "value": matched_val
+                    })
+            
+            # Find a button to click (Continue/Submit)
+            click_btn = None
+            for f in fields:
+                f_type = (f.get("type") or "").lower()
+                f_label = (f.get("label") or "").lower()
+                if f_type == "submit" or "continue" in f_label or "next" in f_label or "submit" in f_label:
+                    click_btn = f.get("id") or f.get("name")
+                    break
+            
+            if fallback_fields:
+                print(f"Fallback successful: resolved {len(fallback_fields)} fields.")
+                return {
+                    "action": "fill",
+                    "fields": fallback_fields,
+                    "click_button": click_btn or "Continue"
+                }
+        except Exception as fallback_err:
+            print(f"Fallback failed: {fallback_err}")
+            
         return {"action": "wait", "fields": [], "click_button": None}

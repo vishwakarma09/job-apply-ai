@@ -391,7 +391,7 @@ window.Connectors.ZipRecruiter = {
 
       logMessage("ZipRecruiter Quick Apply detected. Starting auto-form filling...");
       let formIteration = 0;
-      let previousHtml = "";
+      let previousSignature = "";
       let unchangedCount = 0;
 
       let learnedAnswers = {};
@@ -448,19 +448,32 @@ window.Connectors.ZipRecruiter = {
           return true;
         }
 
-        const currentHtml = activeForm.innerHTML;
-        if (currentHtml === previousHtml) {
+        const getFormSignature = (form) => {
+          const inputs = Array.from(form.querySelectorAll("input, select, textarea"));
+          return inputs.map(el => {
+            let val = "";
+            if (el.type === "checkbox" || el.type === "radio") {
+              val = el.checked ? (el.value || "on") : "off";
+            } else {
+              val = el.value || "";
+            }
+            return `${el.name || el.id || ""}:${el.type || el.tagName.toLowerCase()}:${val}`;
+          }).join("|");
+        };
+
+        const currentSignature = getFormSignature(activeForm);
+        if (currentSignature === previousSignature) {
           unchangedCount++;
-          if (unchangedCount >= 6) {
+          if (unchangedCount >= 5) {
             logMessage("Form stalled due to missing/unanswered required questions. Skipping job...");
             return false;
           }
-          logMessage(`Page content unchanged. Waiting for next step (attempt ${unchangedCount}/6)...`);
-          await sleep(1500);
+          logMessage(`Page fields unchanged. Waiting for next step (attempt ${unchangedCount}/5)...`);
+          await sleep(2500);
           continue;
         }
         unchangedCount = 0;
-        previousHtml = currentHtml;
+        previousSignature = currentSignature;
         formIteration++;
 
         logMessage(`Filling step ${formIteration}...`);

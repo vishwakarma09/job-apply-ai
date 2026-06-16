@@ -117,29 +117,105 @@ setTimeout(async () => {
       console.log("[AutoLogin] Localhost auth setup failed/skipped:", e.message);
     }
 
-    console.log("Navigating to www.ziprecruiter.com...");
-    await page.goto('https://www.ziprecruiter.com/', { waitUntil: 'domcontentloaded' }).catch(e => {
+    console.log("Navigating to ZipRecruiter Sign-In page...");
+    await page.goto('https://www.ziprecruiter.com/login?realm=jobseeker', { waitUntil: 'domcontentloaded' }).catch(e => {
       console.log("Navigation warning:", e.message);
     });
+    
+    await page.waitForTimeout(4000);
 
-    console.log("\n==================================================================");
-    console.log("INSTRUCTIONS FOR USER:");
-    console.log("1. Please log in to your ZipRecruiter account in the newly opened Chrome window.");
-    console.log("2. Reload the AI Job Apply Assistant extension in Chrome:");
-    console.log("   Go to chrome://extensions/, find 'AI Job Apply Assistant', and click reload.");
-    console.log("3. Navigate to a ZipRecruiter job search page (e.g. searching for Software Engineer).");
-    console.log("4. Once logged in and on the search page, press ENTER in this terminal to continue.");
-    console.log("==================================================================\n");
+    const currentUrl = page.url();
+    const emailSelector = 'input[type="email"], input[name="email"], input[id*="email"]';
+    const isEmailVisible = await page.locator(emailSelector).isVisible({ timeout: 3000 }).catch(() => false);
+    
+    // Check if we are already logged in (redirected away from login/signin page, or email input not visible)
+    const isLoginUrl = currentUrl.includes("ziprecruiter.com/login") || currentUrl.includes("ziprecruiter.com/signin") || currentUrl.includes("ziprecruiter.com/authn");
+    if (!isLoginUrl || !isEmailVisible) {
+      console.log(`Already logged in to ZipRecruiter (URL: ${currentUrl}). Skipping login sequence.`);
+    } else {
+      console.log("Entering email ID...");
+      await page.waitForSelector(emailSelector, { timeout: 10000 });
+      await page.fill(emailSelector, 'kkumar.sandeep89@gmail.com');
+      
+      console.log("Submitting email...");
+      const continueBtn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Next"), input[type="submit"]').first();
+      if (await continueBtn.count() > 0 && await continueBtn.isVisible()) {
+        await continueBtn.click();
+      } else {
+        await page.keyboard.press('Enter');
+      }
+      await page.waitForTimeout(4000);
+      
+      // Check for Turnstile/reCAPTCHA
+      let isRecaptchaVisible = await page.locator('iframe[src*="recaptcha"], .g-recaptcha, #g-recaptcha-response, iframe[src*="turnstile"]').isVisible().catch(() => false);
+      if (isRecaptchaVisible) {
+        console.log("[RECAPTCHA] Captcha/Turnstile detected! Please solve it in the Google Chrome window...");
+        while (isRecaptchaVisible) {
+          await page.waitForTimeout(2000);
+          isRecaptchaVisible = await page.locator('iframe[src*="recaptcha"], .g-recaptcha, #g-recaptcha-response, iframe[src*="turnstile"]').isVisible().catch(() => false);
+          const urlCheck = page.url();
+          if (!urlCheck.includes("/login") && !urlCheck.includes("/signin") && !urlCheck.includes("/authn")) {
+            break;
+          }
+        }
+        console.log("Captcha solved or bypassed! Resuming login sequence...");
+        await page.waitForTimeout(4000);
+      }
+      
+      // Check for password screen
+      const passwordInputSelector = 'input[type="password"]';
+      const isPasswordVisible = await page.locator(passwordInputSelector).isVisible({ timeout: 2000 }).catch(() => false);
+      if (isPasswordVisible) {
+        console.log("Password screen visible. Entering password...");
+        await page.fill(passwordInputSelector, 'password');
+        const submitBtn = page.locator('button[type="submit"], button:has-text("Sign In"), button:has-text("Log In")').first();
+        if (await submitBtn.count() > 0) {
+          await submitBtn.click();
+        } else {
+          await page.keyboard.press('Enter');
+        }
+        await page.waitForTimeout(4000);
+      }
+      
+      // Check for verification code screen (passcode/OTP)
+      const otpInputSelector = 'input[name="otp-input"], input[id*="code"], input[name*="code"], input[id*="otp"], input[name*="otp"], input[type="tel"]';
+      const isOtpVisible = await page.locator(otpInputSelector).first().isVisible({ timeout: 5000 }).catch(() => false);
+      if (isOtpVisible) {
+        console.log("Verification code screen loaded. Fetching JWT token from backend...");
+        try {
+          const token = await getBackendToken();
+          console.log("Backend JWT token obtained. Polling backend for ZipRecruiter OTP...");
+          const otp = await pollOtp(token);
+          console.log(`Received OTP: ${otp}. Entering code...`);
+          
+          const inputs = page.locator(otpInputSelector);
+          const count = await inputs.count();
+          if (count === 1) {
+            await inputs.fill(otp);
+          } else if (count > 1) {
+            for (let i = 0; i < Math.min(count, otp.length); i++) {
+              await inputs.nth(i).fill(otp[i]);
+            }
+          } else {
+            await page.keyboard.type(otp);
+          }
+          
+          await page.waitForTimeout(1000);
+          console.log("Submitting verification code...");
+          const verifyBtn = page.locator('button[type="submit"]:visible, button:has-text("Verify"):visible, button:has-text("Sign in"):visible, button:has-text("Submit"):visible').first();
+          await verifyBtn.click();
+          
+          console.log("Waiting for redirect after verification...");
+          await page.waitForTimeout(8000);
+        } catch (err) {
+          console.log("OTP flow warning/error:", err.message);
+        }
+      }
+    }
 
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    await new Promise(resolve => rl.once('line', resolve));
-    console.log("Resuming simulation... Initializing ZipRecruiter automation sequence.");
-    console.log("Navigating target page to Customer Service jobs search page...");
-    await page.goto('https://www.ziprecruiter.com/jobs-search?search=Customer+Service&location=Toronto%2C+ON', { waitUntil: 'domcontentloaded' }).catch(() => {});
-
-    // Auto-launch sequences
-    autoLaunchSingleApply(page, context).catch(err => {
-      console.error("[AutoLaunch] Error in single apply/turbo launcher:", err);
+    console.log("Signing in completed. Launching job search and Turbo Mode...");
+    autoLaunchTurboMode(page, context).catch(err => {
+      console.error("[AutoLaunch] Error in autoLaunchTurboMode:", err);
     });
 
     let stepCounter = 0;
@@ -308,6 +384,7 @@ setTimeout(async () => {
 
     setTimeout(monitorLoop, 1000);
 
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     console.log("Simulation console initialized. Commands: 'capture'/'c' to take step snapshot, 'exit'/'q' to quit.");
     rl.on('line', async (line) => {
       const input = line.trim().toLowerCase();
@@ -328,70 +405,171 @@ setTimeout(async () => {
   }
 }, 2000);
 
-async function autoLaunchSingleApply(page, context) {
-  const sleepHelper = ms => new Promise(r => setTimeout(r, ms));
-  console.log("[AutoLaunch] Starting auto-launch single apply / turbo monitor loop...");
+async function autoLaunchTurboMode(page, context) {
+  console.log("[AutoLaunch] Waiting for ZipRecruiter main/search page to settle...");
+  await page.waitForTimeout(4000);
   
-  let lastPageUrl = "";
-  let autoLaunched = false;
-
-  while (true) {
-    await sleepHelper(2000);
-    let activePages = [];
+  let currentUrl = page.url();
+  console.log("[AutoLaunch] Current URL:", currentUrl);
+  
+  // If we are on ZipRecruiter home/landing page (not search results page) or if search page lacks radius parameter, navigate directly
+  const isSearchPage = currentUrl.includes("/jobs-search") || currentUrl.includes("/candidate/search") || currentUrl.includes("/c/search");
+  if (!isSearchPage || (isSearchPage && !currentUrl.includes("radius="))) {
+    console.log("[AutoLaunch] Not on search results page or missing radius parameter. Navigating directly to Software Developer jobs in Toronto with radius=0...");
     try {
-      activePages = context.pages().filter(p => !p.url().startsWith('chrome://') && !p.url().startsWith('about:'));
-    } catch (err) {
-      continue;
-    }
-    const targetPage = activePages.find(p => p.url().includes("ziprecruiter"));
-    if (!targetPage) {
-      continue;
-    }
-    
-    const currentUrl = targetPage.url();
-    if (currentUrl !== lastPageUrl) {
-      console.log(`[AutoLaunch] Page navigation/reload detected (from "${lastPageUrl}" to "${currentUrl}"). Resetting auto-launch flag.`);
-      lastPageUrl = currentUrl;
-      autoLaunched = false;
-    }
-
-    try {
-      const triggerSelector = '#ai-job-apply-extension-root >> .trigger-btn';
-      const triggerBtn = targetPage.locator(triggerSelector);
-      
-      const isTriggerAttached = await triggerBtn.isVisible({ timeout: 1000 }).catch(() => false);
-      if (!isTriggerAttached) {
-        continue;
-      }
-      
-      // Check if drawer is already open
-      const drawerSelector = '#ai-job-apply-extension-root >> .drawer';
-      const isOpen = await targetPage.locator(drawerSelector).evaluate(el => el.classList.contains('open')).catch(() => false);
-      
-      if (!isOpen) {
-        console.log("[AutoLaunch] Drawer is closed. Clicking trigger button to open...");
-        await triggerBtn.click();
-        await sleepHelper(1000);
-      }
-
-      if (!autoLaunched) {
-        const launchBtn = targetPage.locator('#ai-job-apply-extension-root >> #btn-start-turbo');
-        const btnText = await launchBtn.innerText().catch(() => "");
-        
-        if (btnText.includes("Launch Turbo") || btnText.includes("Start Turbo")) {
-          // Switch to Turbo tab first
-          await targetPage.locator('#ai-job-apply-extension-root >> #tab-btn-turbo').click().catch(() => {});
-          await sleepHelper(500);
-          console.log(`[AutoLaunch] Launch button says "${btnText.trim()}". Clicking to start Turbo Mode...`);
-          await launchBtn.click();
-          autoLaunched = true;
-        } else if (btnText.includes("Stop Turbo")) {
-          // Already running
-          autoLaunched = true;
-        }
-      }
+      await page.goto("https://www.ziprecruiter.com/jobs-search?search=Software+Developer&location=Toronto%2C+ON&radius=0", { waitUntil: 'domcontentloaded', timeout: 25000 });
+      await page.waitForTimeout(4000);
     } catch (e) {
-      // Ignore transient errors
+      console.log("[AutoLaunch] Direct navigation failed:", e.message);
     }
   }
+
+  // Now we should be on the search results page
+  console.log("[AutoLaunch] Waiting for job cards on search results page...");
+  try {
+    const cardSelector = '.job_result_two_pane_v2, [class*="job_result_two_pane"], [data-testid="job-card"], .job_result, .job-result';
+    await page.waitForSelector(cardSelector, { timeout: 15000 });
+    
+    console.log("[AutoLaunch] Finding first job card...");
+    const cards = page.locator(cardSelector);
+    const count = await cards.count();
+    console.log(`[AutoLaunch] Found ${count} job cards.`);
+    
+    if (count > 0) {
+      console.log("[AutoLaunch] Clicking the first job card to trigger details and widget load...");
+      const firstCard = cards.first();
+      // Remove target attributes first
+      await firstCard.evaluate(el => {
+        const anchors = el.querySelectorAll("a");
+        anchors.forEach(a => a.removeAttribute("target"));
+        if (el.tagName === "A") {
+          el.removeAttribute("target");
+        }
+      });
+      
+      // Dismiss any blocking modals
+      console.log("[AutoLaunch] Checking for overlay modals to dismiss...");
+      try {
+        const dismissButtons = page.locator('button:has-text("Got It"), button:has-text("Got it"), button:has-text("Close"), button[aria-label="Close"], button[class*="close"]');
+        const dismissCount = await dismissButtons.count();
+        for (let i = 0; i < dismissCount; i++) {
+          const btn = dismissButtons.nth(i);
+          if (await btn.isVisible()) {
+            console.log(`[AutoLaunch] Dismissing modal by clicking button: "${await btn.innerText().catch(() => "")}"`);
+            await btn.evaluate(el => el.click()).catch(() => {});
+            await page.waitForTimeout(1000);
+          }
+        }
+      } catch (err) {
+        console.log("[AutoLaunch] No modals to dismiss or error dismissing:", err.message);
+      }
+
+      const jobLink = firstCard.locator("button[class*='text-left'], button[class*='text-primary'], [data-testid='job-card-title'] a, [class*='jobTitle'] a, .job_title a, a[href*='/job/']").first();
+      if (await jobLink.count() > 0) {
+        console.log("[AutoLaunch] Clicking job link programmatically...");
+        await jobLink.evaluate(el => el.click());
+      } else {
+        console.log("[AutoLaunch] Clicking first card programmatically...");
+        await firstCard.evaluate(el => el.click());
+      }
+      
+      console.log("[AutoLaunch] Waiting 3 seconds for details and widget to load...");
+      await page.waitForTimeout(3000);
+      
+      console.log("[AutoLaunch] Finding floating AI widget trigger button...");
+      const triggerSelector = '#ai-job-apply-extension-root >> .trigger-btn';
+      const triggerBtn = page.locator(triggerSelector);
+      await triggerBtn.waitFor({ state: 'attached', timeout: 15000 });
+      console.log("[AutoLaunch] Widget trigger found. Clicking it to open drawer...");
+      await triggerBtn.click();
+      
+      console.log("[AutoLaunch] Waiting for Turbo Tab inside drawer...");
+      const turboTabSelector = '#ai-job-apply-extension-root >> #tab-btn-turbo';
+      const turboTab = page.locator(turboTabSelector);
+      await turboTab.waitFor({ state: 'visible', timeout: 5000 });
+      console.log("[AutoLaunch] Clicking Turbo tab...");
+      await turboTab.click();
+      
+      console.log("[AutoLaunch] Waiting for Start Turbo Apply button to be enabled...");
+      const startTurboBtnSelector = '#ai-job-apply-extension-root >> #btn-start-turbo';
+      const startTurboBtn = page.locator(startTurboBtnSelector);
+      await startTurboBtn.waitFor({ state: 'visible', timeout: 5000 });
+      
+      // Wait up to 10 seconds for the button to not be disabled
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const isDisabled = await startTurboBtn.evaluate(el => el.disabled);
+        if (!isDisabled) {
+          console.log("[AutoLaunch] Start Turbo Apply button is enabled!");
+          break;
+        }
+        console.log(`[AutoLaunch] Button disabled (attempt ${attempt + 1}/10), waiting for connection check...`);
+        await page.waitForTimeout(1000);
+      }
+      
+      const isRunning = await startTurboBtn.evaluate(el => el.classList.contains('danger') || el.innerText.toLowerCase().includes('stop'));
+      if (isRunning) {
+        console.log("[AutoLaunch] Turbo Mode is already running/resumed. Skipping click.");
+      } else {
+        console.log("[AutoLaunch] Clicking 'Start Turbo Apply' button!");
+        await startTurboBtn.click();
+      }
+      console.log("[AutoLaunch] Turbo mode successfully launched/active! Monitoring the progress...");
+    } else {
+      console.log("[AutoLaunch] No job cards found to click.");
+    }
+  } catch (e) {
+    console.log("[AutoLaunch] Error during auto launch sequence:", e.message);
+  }
+}
+
+async function getBackendToken() {
+  const loginUrl = "http://localhost:8000/api/auth/login";
+  const params = new URLSearchParams();
+  params.append("username", "kkumar.sandeep89@gmail.com");
+  params.append("password", "password");
+
+  const response = await fetch(loginUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: params.toString()
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend login failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+async function pollOtp(token) {
+  const pollUrl = "http://localhost:8000/api/email-credentials/poll-otp?sender_filter=ziprecruiter";
+  const timeout = 120000;
+  const interval = 5000;
+  const startTime = Date.now();
+
+  console.log("Starting OTP poll from backend for ZipRecruiter...");
+  while (Date.now() - startTime < timeout) {
+    try {
+      const response = await fetch(pollUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.otp) {
+          console.log(`Successfully fetched OTP from backend: ${data.otp}`);
+          return data.otp;
+        }
+      }
+    } catch (err) {
+      console.log("Error polling OTP:", err.message);
+    }
+    await new Promise(r => setTimeout(r, interval));
+  }
+  throw new Error("Timeout polling for OTP");
 }

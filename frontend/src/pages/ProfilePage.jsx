@@ -519,22 +519,24 @@ const KnowledgeGraphQuestions = () => {
           </h4>
           <div className="flex flex-col gap-3">
             {unanswered.map(q => (
-              <div key={q.id} className="p-4 rounded-xl bg-red-500/[0.02] border border-red-500/20 flex flex-col gap-2">
+              <div key={q.id} className="p-4 rounded-xl bg-red-500/[0.02] border border-red-500/20 flex flex-col gap-3">
                 <span className="text-xs font-semibold text-white">{q.question}</span>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
+                <div className="flex flex-col gap-2.5">
+                  <textarea
+                    rows={2}
                     value={answers[q.id] || ""}
                     onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-                    placeholder="Provide your answer..."
-                    className="flex-1 bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                    placeholder="Provide a detailed answer to enrich your knowledge base..."
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white resize-y"
                   />
-                  <button
-                    onClick={() => handleSaveAnswer(q.id)}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-colors"
-                  >
-                    Save
-                  </button>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => handleSaveAnswer(q.id)}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-5 py-2 rounded-xl transition-colors"
+                    >
+                      Save Answer
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -546,21 +548,23 @@ const KnowledgeGraphQuestions = () => {
         <h4 className="text-xs font-bold text-[#908fa0]">Answered Questions ({answered.length})</h4>
         <div className="flex flex-col gap-2 max-h-80 overflow-y-auto pr-1">
           {answered.map(q => (
-            <div key={q.id} className="p-3 rounded-xl bg-white/5 border border-white/5 flex flex-col gap-2">
+            <div key={q.id} className="p-4 rounded-xl bg-white/5 border border-white/5 flex flex-col gap-3">
               <span className="text-xs font-semibold text-white/90">{q.question}</span>
-              <div className="flex gap-2">
-                <input
-                  type="text"
+              <div className="flex flex-col gap-2.5">
+                <textarea
+                  rows={2}
                   value={answers[q.id] || ""}
                   onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
-                  className="flex-1 bg-black/20 border border-white/5 rounded-lg py-1.5 px-3 text-xs focus:outline-none focus:border-indigo-500 text-white/70"
+                  className="w-full bg-black/20 border border-white/5 rounded-lg py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white/70 resize-y"
                 />
-                <button
-                  onClick={() => handleSaveAnswer(q.id)}
-                  className="bg-white/10 hover:bg-white/20 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  Update
-                </button>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => handleSaveAnswer(q.id)}
+                    className="bg-white/10 hover:bg-white/20 text-white font-bold text-[10px] px-4 py-1.5 rounded-lg transition-colors"
+                  >
+                    Update Answer
+                  </button>
+                </div>
               </div>
             </div>
           ))}

@@ -2987,16 +2987,17 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
   const startTurboApply = async (resumedState = null) => {
     if (!isContextValid()) return;
     
-    let profile, limit, appliedCount, processedJks;
+    let profile, limit, appliedCount, processedJks, profileJsonStr;
     
     if (resumedState) {
-      profile = JSON.parse(resumedState.profile_json);
+      profileJsonStr = resumedState.profile_json;
+      profile = JSON.parse(profileJsonStr);
       limit = resumedState.limit;
       appliedCount = resumedState.applied_count;
       processedJks = resumedState.processed_jks || [];
     } else {
       const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
-      const profileJsonStr = turboBtn ? turboBtn.dataset.profileJson : null;
+      profileJsonStr = turboBtn ? turboBtn.dataset.profileJson : null;
       if (!profileJsonStr) return;
       profile = JSON.parse(profileJsonStr);
       const limitSelect = shadowRoot.querySelector("#turbo-limit");

@@ -200,6 +200,43 @@ def create_extension_log(
 )
     return {"status": "ok"}
 
+def is_generic_ui_question(question: str) -> bool:
+    q_lower = question.strip().lower()
+    if not q_lower:
+        return True
+    # Ignore very short labels/values
+    if len(q_lower) < 3:
+        return True
+    # Ignore purely numeric labels
+    if q_lower.replace(".", "").replace(",", "").isdigit():
+        return True
+        
+    ui_keywords = {
+        "continue", "next", "submit", "back", "cancel", "close", "clear", 
+        "go to", "pick a date", "previous", "share", "copy", "ok", "got it", 
+        "yes", "no", "save", "date picker", "month", "year", "day", 
+        "select", "choose", "button", "menu", "navigation", "search", 
+        "filter", "collapse", "expand", "dismiss", "sign in", "log in", 
+        "log out", "sign out", "register", "apply", "easy apply", "quick apply",
+        "copy link", "share this", "view details", "estimated pay", "job details",
+        "upload resume", "upload", "choose file"
+    }
+    
+    if q_lower in ui_keywords:
+        return True
+        
+    generic_phrases = [
+        "go to next", "go to previous", "pick a date", "copy job link", 
+        "share this job", "view job", "read more", "show more", "hide",
+        "terms of service", "privacy policy", "all rights reserved",
+        "close modal", "dismiss alert", "cookie settings", "previous month", 
+        "next month", "page number", "site navigation", "close popup"
+    ]
+    if any(phrase in q_lower for phrase in generic_phrases):
+        return True
+        
+    return False
+
 @router.post("/solve-screen")
 def solve_screen_endpoint(
     payload: dict,
@@ -255,7 +292,8 @@ def solve_screen_endpoint(
             except Exception as query_err:
                 print(f"Error querying user_knowledgebase for RAG: {query_err}")
                 
-            if not has_match:
+            is_required = f.get("required") is True or str(f.get("required")).lower() == "true"
+            if not has_match and is_required and not is_generic_ui_question(label_clean):
                 # Check if this exact question exists
                 existing_entry = db.query(models.UserKnowledgebase).filter(
                     models.UserKnowledgebase.user_id == current_user.id,
@@ -270,7 +308,7 @@ def solve_screen_endpoint(
                     )
                     db.add(new_kb)
                     db.commit()
-
+                    
         # 2. Call AI Solver passing the RAG context
         from ..services import cerebras_service
         result = cerebras_service.solve_screen(profile_data, url, title, heading, fields, rag_context)
