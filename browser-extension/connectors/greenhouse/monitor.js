@@ -513,6 +513,10 @@ async function autoLaunchSingleApply(page, context) {
         break;
       } catch (e) {
         console.log("[AutoLaunch] Single apply/turbo trigger error (will retry):", e.message);
+        if (e.message.includes("Timeout")) {
+          console.log("[AutoLaunch] Timeout waiting for extension widget. Reloading target page to re-trigger injection...");
+          await targetPage.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+        }
       }
     }
   }
