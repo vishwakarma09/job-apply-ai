@@ -46,6 +46,7 @@ def test_imap_connection(host: str, port: int, username: str, password: str) -> 
 def extract_otp_from_text(text: str) -> Optional[str]:
     # Look for 4-8 digit numbers, possibly labeled as verification code / code / pin / OTP
     patterns = [
+        r"(?i)security code is:?\s*\**\s*([a-z0-9]{8})\b",
         r"(?i)(?:code|verification|otp|pin|passcode)\b.*?(\d{4,8})",
         r"\b(\d{5,8})\b",  # Any 5-8 digit number stand-alone
         r"\b(\d{4})\b",    # 4 digit number

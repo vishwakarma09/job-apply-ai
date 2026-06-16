@@ -120,8 +120,80 @@ setTimeout(async () => {
     await page.goto('https://my.greenhouse.io/', { waitUntil: 'domcontentloaded' }).catch(e => {
       console.log("Navigation warning:", e.message);
     });
+    
+    await page.waitForTimeout(4000);
 
-    // Auto-launch sequences
+    const currentUrl = page.url();
+    const emailSelector = '#email-address, input[type="email"]';
+    const isEmailVisible = await page.locator(emailSelector).isVisible({ timeout: 3000 }).catch(() => false);
+    
+    // Check if we are already logged in (redirected away from login page or email input is not visible)
+    if (!currentUrl.includes("users/sign_in") || !isEmailVisible) {
+      console.log(`Already logged in to Greenhouse (URL: ${currentUrl}). Skipping login sequence.`);
+    } else {
+      // 1. Enter email ID
+      console.log("Entering email ID...");
+      console.log(`Debug URL: ${currentUrl}`);
+      console.log(`Debug Title: ${await page.title().catch(() => 'no title')}`);
+      await page.waitForSelector(emailSelector, { timeout: 10000 });
+      await page.fill(emailSelector, 'kkumar.sandeep89@gmail.com');
+      
+      console.log("Submitting email...");
+      const sendCodeBtnSelector = 'button[type="submit"]';
+      await page.click(sendCodeBtnSelector);
+      await page.waitForTimeout(4000);
+      
+      // 2. Poll OTP and fill code
+      console.log("Waiting for verification code screen...");
+      try {
+        const otpInputSelector = 'input[id*=":-"]';
+        await page.waitForSelector(otpInputSelector, { timeout: 30000 });
+        
+        console.log("Verification code screen loaded. Fetching JWT token from backend...");
+        const token = await getBackendToken();
+        console.log("Backend JWT token obtained. Polling backend for Greenhouse OTP...");
+        
+        const otp = await pollOtp(token);
+        console.log(`Received OTP: ${otp}. Entering code...`);
+        
+        const inputs = page.locator(otpInputSelector);
+        const count = await inputs.count();
+        if (count === 8) {
+          console.log("Typing OTP code character-by-character...");
+          await inputs.first().focus();
+          await page.keyboard.type(otp, { delay: 150 });
+          await page.waitForTimeout(1000);
+          
+          // Verify if all inputs got filled, if not, fallback to direct fill
+          for (let i = 0; i < 8; i++) {
+            const val = await inputs.nth(i).inputValue();
+            if (!val) {
+              console.log(`Input ${i} was not filled by keyboard typing, falling back to direct fill.`);
+              await inputs.nth(i).fill(otp[i]);
+              await inputs.nth(i).evaluate(el => {
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              });
+            }
+          }
+        } else {
+          await page.keyboard.type(otp);
+        }
+        
+        await page.waitForTimeout(1000);
+        console.log("Submitting verification code...");
+        const verifyBtn = page.locator('button[type="submit"]:has-text("Submit"), button:has-text("Submit")').first();
+        await verifyBtn.click();
+        
+        console.log("Waiting for redirect after verification...");
+        await page.waitForTimeout(8000);
+      } catch (err) {
+        console.log("OTP flow warning/error (might be already signed in or using password):", err.message);
+      }
+    }
+
+    // Now trigger the auto launch turbo mode
+    console.log("Signing in completed. Launching job search and Turbo Mode...");
     autoLaunchTurboMode(page, context).catch(err => {
       console.error("[AutoLaunch] Error in background launcher:", err);
     });
@@ -131,10 +203,9 @@ setTimeout(async () => {
     });
 
     console.log("\n==================================================================");
-    console.log("INSTRUCTIONS FOR USER:");
-    console.log("1. Please log in to your Greenhouse account in the newly opened Chrome window.");
-    console.log("2. Once you are logged in and on the dashboard, the script will automatically");
-    console.log("   trigger the AI Job Apply widget drawer and run the Turbo Apply automation.");
+    console.log("INSTRUCTIONS:");
+    console.log("1. The simulation is running in the opened Chrome window.");
+    console.log("2. The script will automatically log in, search for jobs, and trigger Turbo Apply.");
     console.log("3. The script will monitor the page and automatically log each step.");
     console.log("4. Press Enter or type 'c' in this terminal to trigger a manual capture.");
     console.log("==================================================================\n");
@@ -445,4 +516,56 @@ async function autoLaunchSingleApply(page, context) {
       }
     }
   }
+}
+
+async function getBackendToken() {
+  const loginUrl = "http://localhost:8000/api/auth/login";
+  const params = new URLSearchParams();
+  params.append("username", "kkumar.sandeep89@gmail.com");
+  params.append("password", "password");
+
+  const response = await fetch(loginUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: params.toString()
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend login failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+async function pollOtp(token) {
+  const pollUrl = "http://localhost:8000/api/email-credentials/poll-otp?sender_filter=greenhouse&subject_filter=code";
+  const timeout = 120000;
+  const interval = 5000;
+  const startTime = Date.now();
+
+  console.log("Starting OTP poll from backend...");
+  while (Date.now() - startTime < timeout) {
+    try {
+      const response = await fetch(pollUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.otp) {
+          console.log(`Successfully fetched OTP from backend: ${data.otp}`);
+          return data.otp;
+        }
+      }
+    } catch (err) {
+      console.log("Error polling OTP:", err.message);
+    }
+    await new Promise(r => setTimeout(r, interval));
+  }
+  throw new Error("Timeout polling for OTP");
 }
