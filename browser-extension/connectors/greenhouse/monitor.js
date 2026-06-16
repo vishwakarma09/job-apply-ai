@@ -483,6 +483,47 @@ async function autoLaunchSingleApply(page, context) {
           console.log("[AutoLaunch] Auto Fill clicked! Form filling in progress...");
         } else {
           console.log("[AutoLaunch] Listing page detected. Running Turbo Mode...");
+          
+          // Apply search/office filters first
+          try {
+            console.log("[AutoLaunch] Applying filters on listing page...");
+            const keywordInput = targetPage.locator('#keyword-filter');
+            if (await keywordInput.isVisible().catch(() => false)) {
+              const currentVal = await keywordInput.inputValue().catch(() => "");
+              if (!currentVal.toLowerCase().includes("owner")) {
+                console.log("[AutoLaunch] Typing 'Owner' in keyword filter...");
+                await keywordInput.focus();
+                await keywordInput.fill("Owner");
+                await targetPage.waitForTimeout(1000);
+              }
+            }
+
+            const officeInput = targetPage.locator('#office-filter');
+            if (await officeInput.isVisible().catch(() => false)) {
+              console.log("[AutoLaunch] Clicking office filter dropdown...");
+              await officeInput.click();
+              await targetPage.waitForTimeout(1000);
+
+              const listboxId = 'react-select-office-filter-listbox';
+              const listbox = targetPage.locator(`#${listboxId}`);
+              if (await listbox.isVisible().catch(() => false)) {
+                const option = targetPage.locator(`#${listboxId} >> text=TripArc`).first();
+                if (await option.isVisible().catch(() => false)) {
+                  console.log("[AutoLaunch] Selecting 'TripArc' option...");
+                  await option.click();
+                  await targetPage.waitForTimeout(2000);
+                } else {
+                  console.log("[AutoLaunch] 'TripArc' option not found. Pressing Escape...");
+                  await targetPage.keyboard.press('Escape');
+                }
+              } else {
+                console.log("[AutoLaunch] Office filter dropdown did not open.");
+              }
+            }
+          } catch (filterErr) {
+            console.error("[AutoLaunch] Error applying filters on listing page:", filterErr.message);
+          }
+
           console.log("[AutoLaunch] Waiting for Turbo Tab inside drawer...");
           const turboTabSelector = '#ai-job-apply-extension-root >> #tab-btn-turbo';
           const turboTab = targetPage.locator(turboTabSelector);
