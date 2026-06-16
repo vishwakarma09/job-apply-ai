@@ -410,8 +410,10 @@ window.Connectors.Randstad = {
             valueToFill = profile.first_name || "";
           } else if (labelText.includes("last name") || labelText.includes("family name")) {
             valueToFill = profile.last_name || "";
-          } else if (labelText.includes("city") || labelText.includes("location")) {
-            valueToFill = profile.city || "Toronto";
+          } else if (labelText.includes("city") || labelText.includes("location") || labelText.includes("address")) {
+            valueToFill = profile.city || "";
+          } else if (labelText.includes("title") || labelText.includes("role") || labelText.includes("position")) {
+            valueToFill = profile.title || "";
           } else if (labelText.includes("linkedin")) {
             valueToFill = profile.linkedin || "";
           }

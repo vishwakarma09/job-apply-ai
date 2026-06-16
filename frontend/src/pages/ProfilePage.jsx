@@ -253,6 +253,7 @@ const ProfilePage = () => {
 const ProfileMetadataForm = ({ activeProfile, onUpdate }) => {
   const [phone, setPhone] = useState(activeProfile.phone || "");
   const [email, setEmail] = useState(activeProfile.email || "");
+  const [city, setCity] = useState(activeProfile.city || "");
   const [nationality, setNationality] = useState(activeProfile.nationality || "");
   const [visa, setVisa] = useState(activeProfile.visa_sponsorship || "");
   const [disability, setDisability] = useState(activeProfile.disability_status || "");
@@ -267,6 +268,7 @@ const ProfileMetadataForm = ({ activeProfile, onUpdate }) => {
   useEffect(() => {
     setPhone(activeProfile.phone || "");
     setEmail(activeProfile.email || "");
+    setCity(activeProfile.city || "");
     setNationality(activeProfile.nationality || "");
     setVisa(activeProfile.visa_sponsorship || "");
     setDisability(activeProfile.disability_status || "");
@@ -285,6 +287,7 @@ const ProfileMetadataForm = ({ activeProfile, onUpdate }) => {
       await profilesAPI.update(activeProfile.id, {
         phone,
         email,
+        city,
         nationality,
         visa_sponsorship: visa,
         disability_status: disability,
@@ -343,6 +346,17 @@ const ProfileMetadataForm = ({ activeProfile, onUpdate }) => {
             value={nationality}
             onChange={(e) => setNationality(e.target.value)}
             placeholder="e.g. Canadian"
+            className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">City / Location</label>
+          <input 
+            type="text" 
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            placeholder="e.g. Toronto, Ontario"
             className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
           />
         </div>

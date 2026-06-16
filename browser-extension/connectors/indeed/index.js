@@ -574,7 +574,7 @@ window.Connectors.Indeed = {
             valueToFill = profile.last_name || "";
           } else if (labelText.includes("city") || labelText.includes("location") || labelText.includes("address")) {
             valueToFill = profile.city || profile.location || "";
-          } else if (labelText.includes("job title") || (input.name === "jobTitle")) {
+          } else if (labelText.includes("job title") || labelText.includes("title") || labelText.includes("role") || labelText.includes("position") || (input.name === "jobTitle")) {
             valueToFill = profile.title || "";
           } else if (labelText.includes("company") || (input.name === "companyName")) {
             valueToFill = profile.company || "";

@@ -118,6 +118,7 @@ try:
         resume_id=resume.id,
         phone="647-395-0215",
         email="kkumar.sandeep89@gmail.com",
+        city="Toronto",
         nationality="Canadian Citizen",
         work_authorization="Authorized to work in Canada and India. Eligible for TN Visa for USA.",
         visa_sponsorship="Requires TN Visa support for USA. No sponsorship needed for Canada or India."
@@ -129,6 +130,7 @@ try:
         resume_id=resume.id,
         phone="647-395-0215",
         email="kkumar.sandeep89@gmail.com",
+        city="Toronto",
         nationality="Canadian Citizen",
         work_authorization="Authorized to work in Canada and India. Eligible for TN Visa for USA.",
         visa_sponsorship="Requires TN Visa support for USA. No sponsorship needed for Canada or India."
@@ -191,6 +193,12 @@ try:
         credentials_json=None,
         status="Not Connected"
     )
+    connector9 = models.Connector(
+        user_id=test_user.id,
+        platform_name="VanHack",
+        credentials_json=None,
+        status="Not Connected"
+    )
     db.add(connector1)
     db.add(connector2)
     db.add(connector3)
@@ -199,6 +207,7 @@ try:
     db.add(connector6)
     db.add(connector7)
     db.add(connector8)
+    db.add(connector9)
     db.flush()
     
     # 7. Seed Applied Jobs & Conversations

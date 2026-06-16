@@ -436,6 +436,10 @@ window.Connectors.LinkedIn = {
             valueToFill = profile.first_name || "";
           } else if (labelText.includes("last name")) {
             valueToFill = profile.last_name || "";
+          } else if (labelText.includes("city") || labelText.includes("location") || labelText.includes("address")) {
+            valueToFill = profile.city || "";
+          } else if (labelText.includes("title") || labelText.includes("role") || labelText.includes("position")) {
+            valueToFill = profile.title || "";
           } else if (labelText.includes("nationality") || labelText.includes("citizen")) {
             valueToFill = profile.nationality || "";
           } else if (labelText.includes("work authorization") || labelText.includes("legally authorized")) {

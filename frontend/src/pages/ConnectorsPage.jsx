@@ -201,7 +201,8 @@ const ConnectorsPage = () => {
     { name: "Greenhouse", color: "from-teal-500 to-emerald-600" },
     { name: "Randstad", color: "from-sky-500 to-blue-600" },
     { name: "Job Bank", color: "from-red-500 to-red-700" },
-    { name: "CareerBeacon", color: "from-orange-500 to-amber-600" }
+    { name: "CareerBeacon", color: "from-orange-500 to-amber-600" },
+    { name: "VanHack", color: "from-blue-600 to-cyan-500" }
   ];
 
   if (loading) {
@@ -372,7 +373,7 @@ const ConnectorsPage = () => {
                   <button 
                     onClick={() => {
                       setSelectedPlatform(plat.name);
-                      setAuthMethod("cookie");
+                      setAuthMethod(plat.name === "VanHack" ? "credentials" : "cookie");
                       setShowModal(true);
                     }}
                     className="glow-btn text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5"

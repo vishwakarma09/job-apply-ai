@@ -1,35 +1,30 @@
-// connectors/careerbeacon/index.js
-// CareerBeacon Platform Connector for AI Job Apply
+// connectors/vanhack/index.js
+// VanHack Platform Connector for AI Job Apply
 
 window.Connectors = window.Connectors || {};
 
-window.Connectors.CareerBeacon = {
-  name: "CareerBeacon",
+window.Connectors.VanHack = {
+  name: "VanHack",
   
   // Selectors for DOM extraction fallback
   selectors: {
     title: [
+      "#vh-job-details-header-section > p",
+      "#vh-job-details-header-section h1",
       "h1.job-title",
-      "h1 [itemprop='title']",
       "h1.title",
       "[class*='job-title']",
       "[class*='jobTitle']",
-      "[class*='title']",
       "h1"
     ],
     company: [
       ".company-name",
-      "span[itemprop='hiringOrganization'] span[itemprop='name']",
-      "span[property='hiringOrganization']",
-      "span[itemprop='name']",
+      "span.company",
       "[class*='company']",
-      "[class*='employer']",
-      "h2",
-      "h3"
+      "[class*='employer']"
     ],
     location: [
       ".job-location",
-      "span[itemprop='jobLocation'] span[itemprop='addressLocality']",
       ".location",
       "[class*='location']",
       "[class*='address']"
@@ -38,8 +33,6 @@ window.Connectors.CareerBeacon = {
       "#jobDescription",
       ".job-description",
       ".description",
-      ".posting-content",
-      "div[itemprop='description']",
       "[class*='description']",
       "[class*='desc']"
     ]
@@ -57,9 +50,8 @@ window.Connectors.CareerBeacon = {
     const jobId = urlParams.get("job_id") || urlParams.get("jobId") || urlParams.get("id");
     if (jobId) return jobId;
 
-    // Patterns: /posting/(\d+), /job-([0-9]+)/(\d+), /job/(\d+)
-    const match = url.match(/\/posting\/([a-zA-Z0-9\-]+)/) || 
-                  url.match(/\/job\-[0-9]+\/([a-zA-Z0-9\-]+)/) || 
+    // Patterns: /jobs/(\d+), /job/(\d+)
+    const match = url.match(/\/jobs\/([a-zA-Z0-9\-]+)/) || 
                   url.match(/\/job\/([a-zA-Z0-9\-]+)/);
     if (match) return match[1];
 
@@ -69,8 +61,8 @@ window.Connectors.CareerBeacon = {
   // Scrape details of currently loaded job
   scrapeDetails(jobId) {
     let title = "Unknown Position";
-    let company = "CareerBeacon Employer";
-    let location = "Canada";
+    let company = "VanHack Employer";
+    let location = "Remote";
     let description = "";
 
     // 1. Try to extract from schema.org JSON-LD first (highly robust on modern platforms)
@@ -111,7 +103,7 @@ window.Connectors.CareerBeacon = {
       }
     }
 
-    if (company === "CareerBeacon Employer") {
+    if (company === "VanHack Employer") {
       for (const sel of this.selectors.company) {
         const el = document.querySelector(sel);
         if (el && el.innerText.trim()) {
@@ -121,12 +113,22 @@ window.Connectors.CareerBeacon = {
       }
     }
 
-    if (location === "Canada") {
+    if (location === "Remote") {
       for (const sel of this.selectors.location) {
         const el = document.querySelector(sel);
         if (el && el.innerText.trim()) {
           location = el.innerText.trim().replace(/\n/g, "").replace(/\s+/g, " ");
           break;
+        }
+      }
+    }
+
+    if (location === "Remote" || location === "Unknown Location") {
+      const flagImg = document.querySelector('img[src*="flags/4x3/"], img[src*="flag-icon-css"]');
+      if (flagImg && flagImg.parentElement) {
+        const parentText = flagImg.parentElement.innerText.trim();
+        if (parentText) {
+          location = parentText.replace(/\n/g, "").replace(/\s+/g, " ");
         }
       }
     }
@@ -149,7 +151,7 @@ window.Connectors.CareerBeacon = {
       location,
       job_url: jobUrl,
       job_description: description,
-      platform_name: "CareerBeacon"
+      platform_name: "VanHack"
     };
   },
 
@@ -157,12 +159,12 @@ window.Connectors.CareerBeacon = {
   scrapeCardDetails(cardElement) {
     if (!cardElement) return null;
     
-    const titleEl = cardElement.querySelector("a[href*='/posting/'], a[href*='/job-'], a[href*='/job/'], [class*='title']");
+    const titleEl = cardElement.querySelector("a[href*='/jobs/'], a[href*='/job/'], [class*='title']");
     const companyEl = cardElement.querySelector("[class*='company'], [class*='employer']");
     const locationEl = cardElement.querySelector("[class*='location'], p");
 
     const title = titleEl ? titleEl.innerText.trim() : "Unknown Position";
-    const company = companyEl ? companyEl.innerText.trim() : "CareerBeacon Employer";
+    const company = companyEl ? companyEl.innerText.trim() : "VanHack Employer";
     const location = locationEl ? locationEl.innerText.trim().replace(/\n/g, "").replace(/\s+/g, " ") : "Unknown Location";
 
     return { title, company, location };
@@ -178,7 +180,6 @@ window.Connectors.CareerBeacon = {
       '[class*="job-card"]',
       '[class*="job-result"]',
       '[class*="job_card"]',
-      '.posting',
       'li[class*="job"]',
       'div[class*="job"]'
     ];
@@ -186,7 +187,7 @@ window.Connectors.CareerBeacon = {
     let initialList = Array.from(document.querySelectorAll(containerSelectors.join(",")));
     
     // Resolve job links pointing to postings/jobs
-    const jobLinks = Array.from(document.querySelectorAll("a[href*='/posting/'], a[href*='/job-'], a[href*='/job/']"));
+    const jobLinks = Array.from(document.querySelectorAll("a[href*='/jobs/'], a[href*='/job/']"));
     const uniqueParents = new Set();
     
     jobLinks.forEach(link => {
@@ -207,11 +208,10 @@ window.Connectors.CareerBeacon = {
     for (const card of initialList) {
       let jobId = card.getAttribute('data-job-id') || card.getAttribute('id');
       if (!jobId) {
-        const link = card.querySelector("a[href*='/posting/'], a[href*='/job-'], a[href*='/job/']") || 
-                     (card.tagName === "A" && (card.href.includes("/posting/") || card.href.includes("/job-") || card.href.includes("/job/")) ? card : null);
+        const link = card.querySelector("a[href*='/jobs/'], a[href*='/job/']") || 
+                     (card.tagName === "A" && (card.href.includes("/jobs/") || card.href.includes("/job/")) ? card : null);
         if (link) {
-          const match = link.href.match(/\/posting\/([a-zA-Z0-9\-]+)/) || 
-                        link.href.match(/\/job\-[0-9]+\/([a-zA-Z0-9\-]+)/) || 
+          const match = link.href.match(/\/jobs\/([a-zA-Z0-9\-]+)/) || 
                         link.href.match(/\/job\/([a-zA-Z0-9\-]+)/);
           if (match) jobId = match[1];
         }
@@ -241,8 +241,8 @@ window.Connectors.CareerBeacon = {
       cardElement.removeAttribute("target");
     }
 
-    const jobLink = cardElement.querySelector("a[href*='/posting/'], a[href*='/job-'], a[href*='/job/']") || 
-                    (cardElement.tagName === "A" && (cardElement.href.includes("/posting/") || cardElement.href.includes("/job-") || cardElement.href.includes("/job/")) ? cardElement : null);
+    const jobLink = cardElement.querySelector("a[href*='/jobs/'], a[href*='/job/']") || 
+                    (cardElement.tagName === "A" && (cardElement.href.includes("/jobs/") || cardElement.href.includes("/job/")) ? cardElement : null);
 
     if (jobLink) {
       const innerClickTarget = jobLink.querySelector("span, strong, h3, h2, p") || jobLink;
@@ -275,7 +275,7 @@ window.Connectors.CareerBeacon = {
     const buttons = Array.from(document.querySelectorAll('button, a, input[type="button"]'));
     for (const btn of buttons) {
       const text = (btn.textContent || btn.innerText || btn.value || "").toLowerCase().trim();
-      if (text === 'apply' || text === 'apply now' || text === 'easy apply' || text.includes('apply now') || text === 'quick apply' || text === 'submit application' || text === 'apply to this job') {
+      if (text === 'apply' || text === 'apply now' || text === 'easy apply' || text.includes('apply now') || text === 'quick apply' || text === 'submit application' || text === 'apply to this job' || text === 'apply for this job') {
         if (window.isElementVisible(btn)) return btn;
       }
     }
@@ -285,23 +285,41 @@ window.Connectors.CareerBeacon = {
   isAlreadyApplied() {
     const elements = Array.from(document.querySelectorAll('button, span, div, p, a, h1, h2, h3'));
     for (const el of elements) {
-      if (el.children.length === 0) {
-        const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
-        if (text === 'applied' || text === 'application submitted' || text === 'submitted' || text.includes('applied on careerbeacon')) {
-          return true;
-        }
+      const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
+      if (text.includes('applied successfully') || text.includes('withdraw my application') || text.includes('withdraw') || text === 'applied' || text === 'application submitted' || text === 'submitted') {
+        return true;
       }
     }
     return false;
   },
 
-  // CareerBeacon Easy Apply workflow automation
+  // VanHack Easy Apply workflow automation
   EasyApply: {
     async automate(profile, logMessage, checkRunning, jobId = null) {
-      logMessage("CareerBeacon Auto Apply initiated. Starting form auto-fill...");
+      logMessage("VanHack Auto Apply initiated. Starting form auto-fill...");
       
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
       
+      function getLabelText(el) {
+        // 1. Try to find local question container on VanHack modal
+        const container = el.parentElement ? el.parentElement.closest('[class*="question-item-"], [class*="question-item"]') : null;
+        if (container) {
+          const header = container.querySelector('div, span, label, p');
+          if (header) {
+            let text = header.innerText.trim();
+            text = text.replace(/^\d+\.\s*/, ""); // Strip leading "1. " or "2. "
+            text = text.replace(/\*$/, ""); // Strip trailing asterisk
+            return text.trim();
+          }
+        }
+        
+        // 2. Fall back to standard global getLabelText
+        if (window.getLabelText) {
+          return window.getLabelText(el);
+        }
+        return "";
+      }
+
       // Retrieve backend authentication details from storage
       const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
       const token = storage.token;
@@ -321,7 +339,64 @@ window.Connectors.CareerBeacon = {
       let previousHtml = "";
 
       while (checkRunning()) {
-        const form = document.querySelector("form, div[role='dialog'] form, .apply-form, #apply-form");
+        if (window.Connectors.VanHack.isAlreadyApplied()) {
+          logMessage("Application submitted/confirmed successfully!");
+          return true;
+        }
+
+        // Robustly detect the form or container hosting the active inputs
+        let form = null;
+        
+        // 1. Try standard visible forms
+        const forms = Array.from(document.querySelectorAll("form, [role='form']"));
+        for (const f of forms) {
+          if (window.isElementVisible(f)) {
+            form = f;
+            break;
+          }
+        }
+        
+        // 2. Try specific modal/dialog containers that are visible
+        if (!form) {
+          const modalSelectors = [
+            ".question-modal",
+            ".submit-answers-button",
+            "div[role='dialog']",
+            "[class*='modal']",
+            "[class*='dialog']"
+          ];
+          for (const sel of modalSelectors) {
+            const el = document.querySelector(sel);
+            if (el && window.isElementVisible(el)) {
+              const container = el.closest('div[class*="modal"], div[class*="dialog"], [role="dialog"], .question-modal') || el;
+              if (window.isElementVisible(container)) {
+                form = container;
+                break;
+              }
+            }
+          }
+        }
+        
+        // 3. Fallback: Find closest common ancestor of the first visible input and the submit button
+        if (!form) {
+          const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]), select, textarea'));
+          const visibleInput = inputs.find(i => window.isElementVisible(i));
+          if (visibleInput) {
+            let parent = visibleInput.parentElement;
+            while (parent && parent !== document.body) {
+              const hasSubmit = parent.querySelector("button[type='submit'], button.submit-button, button.btn-primary, .submit-answers-button, button.submit-answers-button");
+              if (hasSubmit && window.isElementVisible(hasSubmit)) {
+                form = parent;
+                break;
+              }
+              parent = parent.parentElement;
+            }
+            if (!form) {
+              form = visibleInput.closest('div[class*="modal"], div[class*="dialog"], [role="dialog"], .question-modal') || document.body;
+            }
+          }
+        }
+
         if (!form) {
           logMessage("Form element not detected on the page. Waiting for modal/page...");
           await sleep(1500);
@@ -331,7 +406,7 @@ window.Connectors.CareerBeacon = {
         const currentHtml = form.innerHTML;
         if (currentHtml === previousHtml) {
           logMessage("Application form stalled. Please answer outstanding questions manually.");
-          const activeJobId = jobId || window.Connectors.CareerBeacon.getJobId();
+          const activeJobId = jobId || window.Connectors.VanHack.getJobId();
           if (activeJobId) {
             chrome.storage.local.set({ [`retry_outstanding_questions_${activeJobId}`]: true });
           }
@@ -394,85 +469,84 @@ window.Connectors.CareerBeacon = {
 
           // Check learned answers
           let matchedVal = null;
-          for (const [q, a] of Object.entries(learnedAnswers)) {
-            const cleanQ = q.toLowerCase().trim();
-            if (labelText === cleanQ || labelText.includes(cleanQ) || cleanQ.includes(labelText)) {
-              matchedVal = a;
-              break;
-            }
-          }
-
-          if (matchedVal !== null && matchedVal !== undefined && String(matchedVal).trim() !== "") {
-            valueToFill = String(matchedVal).trim();
-          } else if (labelText.includes("phone") || labelText.includes("mobile") || labelText.includes("number") || labelText.includes("tel")) {
-            valueToFill = profile.phone || "+1 (555) 019-2834";
-          } else if (labelText.includes("email")) {
-            valueToFill = profile.email || "";
-          } else if (labelText.includes("first name") || labelText.includes("given name") || labelText === "first") {
-            valueToFill = profile.first_name || "";
-          } else if (labelText.includes("last name") || labelText.includes("family name") || labelText === "last") {
-            valueToFill = profile.last_name || "";
-          } else if (labelText.includes("city") || labelText.includes("location") || labelText.includes("address")) {
-            valueToFill = profile.city || "";
-          } else if (labelText.includes("title") || labelText.includes("role") || labelText.includes("position")) {
-            valueToFill = profile.title || "";
-          } else if (labelText.includes("linkedin")) {
-            valueToFill = profile.linkedin || "";
-          } else if (labelText.includes("github")) {
-            valueToFill = profile.github || "";
-          }
-
-          if (valueToFill && !input.value) {
-            input.value = valueToFill;
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-            input.dispatchEvent(new Event("change", { bubbles: true }));
-          }
-        }
-
-        // 3. Fill select dropdowns
-        const selects = form.querySelectorAll("select");
-        selects.forEach(select => {
-          if (select.selectedIndex <= 0 && select.options.length > 1) {
-            const labelText = getLabelText(select).toLowerCase().trim();
-            let targetVal = "";
-
-            let matchedVal = null;
+          if (labelText) {
             for (const [q, a] of Object.entries(learnedAnswers)) {
               const cleanQ = q.toLowerCase().trim();
-              if (labelText === cleanQ || labelText.includes(cleanQ) || cleanQ.includes(labelText)) {
+              if (labelText === cleanQ || labelText.includes(cleanQ) || (cleanQ.length > 5 && cleanQ.includes(labelText))) {
                 matchedVal = a;
                 break;
               }
             }
+          }
 
-            if (matchedVal !== null && matchedVal !== undefined && String(matchedVal).trim() !== "") {
-              targetVal = String(matchedVal).trim();
-            } else if (labelText.includes("sponsorship") || labelText.includes("sponsor")) {
-              targetVal = profile.visa_sponsorship || "";
-            }
+          if (matchedVal !== null) {
+            valueToFill = matchedVal;
+          } else if (labelText.includes("name") || labelText.includes("first")) {
+            valueToFill = profile.name || "";
+          } else if (labelText.includes("email")) {
+            valueToFill = profile.email || "";
+          } else if (labelText.includes("phone") || labelText.includes("tel") || labelText.includes("mobile")) {
+            valueToFill = profile.phone || "";
+          } else if (labelText.includes("nationality") || labelText.includes("citizen")) {
+            valueToFill = profile.nationality || "";
+          } else if (labelText.includes("city") || labelText.includes("location") || labelText.includes("address")) {
+            valueToFill = profile.city || "";
+          } else if (labelText.includes("title") || labelText.includes("role") || labelText.includes("position")) {
+            valueToFill = profile.title || "";
+          }
 
-            let selectIndex = 1;
-            if (targetVal) {
-              for (let i = 0; i < select.options.length; i++) {
-                const optText = select.options[i].text.toLowerCase();
-                const valText = select.options[i].value.toLowerCase();
-                if (optText.includes(targetVal.toLowerCase()) || valText.includes(targetVal.toLowerCase())) {
-                  selectIndex = i;
-                  break;
-                }
+          if (valueToFill) {
+            input.value = valueToFill;
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            logMessage(`Filled field: "${labelText}" -> "${valueToFill}"`);
+          }
+        }
+
+        // 3. Handle dropdowns/selects
+        const selects = Array.from(form.querySelectorAll("select"));
+        for (const select of selects) {
+          if (select.tabIndex === -1 || select.offsetParent === null) continue;
+          const labelText = getLabelText(select).toLowerCase().trim();
+          
+          let targetAnswer = "";
+          if (labelText) {
+            for (const [q, a] of Object.entries(learnedAnswers)) {
+              const cleanQ = q.toLowerCase().trim();
+              if (labelText === cleanQ || labelText.includes(cleanQ) || (cleanQ.length > 5 && cleanQ.includes(labelText))) {
+                targetAnswer = a.toLowerCase().trim();
+                break;
               }
             }
-            select.selectedIndex = selectIndex;
-            select.dispatchEvent(new Event("change", { bubbles: true }));
           }
-        });
 
-        // 4. Fill radio buttons
+          if (targetAnswer) {
+            let matchedValue = "";
+            for (const option of Array.from(select.options)) {
+              const optText = option.text.toLowerCase().trim();
+              if (optText === targetAnswer || optText.includes(targetAnswer) || targetAnswer.includes(optText)) {
+                matchedValue = option.value;
+                break;
+              }
+            }
+
+            if (matchedValue) {
+              select.value = matchedValue;
+              select.dispatchEvent(new Event("change", { bubbles: true }));
+              logMessage(`Selected option for "${labelText}" -> "${targetAnswer}"`);
+            }
+          }
+        }
+
+        // 3.5 Handle radio buttons
         const radioGroups = {};
         form.querySelectorAll("input[type='radio']").forEach(radio => {
+          if (radio.tabIndex === -1 || radio.offsetParent === null) return;
           const name = radio.name;
-          if (!radioGroups[name]) radioGroups[name] = [];
-          radioGroups[name].push(radio);
+          if (name) {
+            if (!radioGroups[name]) radioGroups[name] = [];
+            radioGroups[name].push(radio);
+          }
         });
 
         for (const name in radioGroups) {
@@ -480,66 +554,122 @@ window.Connectors.CareerBeacon = {
           const isAnyChecked = radios.some(r => r.checked);
           if (!isAnyChecked) {
             let labelText = "";
-            const container = radios[0].closest("fieldset, [class*='question'], [class*='Container']");
+            const container = radios[0].closest("fieldset, [class*='question'], [class*='Container'], [class*='Module'], div[class*='item']");
             if (container) {
-              const headerEl = container.querySelector("legend, span, label, p");
-              if (headerEl) labelText = headerEl.innerText.toLowerCase();
+              const headerEl = container.querySelector("h1, h2, h3, legend, span, label, p");
+              if (headerEl) labelText = headerEl.innerText.toLowerCase().trim();
             }
-            if (!labelText) labelText = getLabelText(radios[0]).toLowerCase().trim();
+            if (!labelText) {
+              const legend = radios[0].closest("fieldset")?.querySelector("legend");
+              if (legend) labelText = legend.innerText.toLowerCase().trim();
+            }
+            if (!labelText) {
+              labelText = getLabelText(radios[0]).toLowerCase().trim();
+            }
+
+            let matchedVal = null;
+            if (labelText) {
+              for (const [q, a] of Object.entries(learnedAnswers)) {
+                const cleanQ = q.toLowerCase().trim();
+                if (labelText === cleanQ || labelText.includes(cleanQ) || (cleanQ.length > 5 && cleanQ.includes(labelText))) {
+                  matchedVal = a;
+                  break;
+                }
+              }
+            }
 
             let targetVal = "yes";
-            if (labelText.includes("sponsorship") || labelText.includes("sponsor")) {
-              targetVal = (profile.visa_sponsorship === "Yes") ? "yes" : "no";
-            } else if (labelText.includes("authorized") || labelText.includes("work in")) {
+            if (matchedVal !== null && matchedVal !== undefined && String(matchedVal).trim() !== "") {
+              targetVal = String(matchedVal).toLowerCase().trim();
+            } else if (labelText.includes("sponsorship") || labelText.includes("sponsor")) {
+              const profileSponsorship = (profile.visa_sponsorship || "").toLowerCase();
+              targetVal = (profileSponsorship.includes("yes") || profileSponsorship.includes("require")) ? "yes" : "no";
+            } else if (labelText.includes("authorized") || labelText.includes("legal") || labelText.includes("right to work")) {
               targetVal = "yes";
             }
 
             let checkIndex = 0;
             radios.forEach((r, idx) => {
-              const label = getLabelText(r).toLowerCase();
-              if (label === targetVal || label.includes(targetVal)) {
+              const label = getLabelText(r).toLowerCase().trim();
+              if (label === targetVal || label.includes(targetVal) || targetVal.includes(label)) {
                 checkIndex = idx;
               }
             });
             radios[checkIndex].checked = true;
             radios[checkIndex].dispatchEvent(new Event("change", { bubbles: true }));
+            logMessage(`Selected radio for "${labelText}" -> "${getLabelText(radios[checkIndex])}"`);
           }
         }
 
-        // 5. Fill Checkboxes
+        // 3.6 Handle Checkboxes
         form.querySelectorAll("input[type='checkbox']").forEach(cb => {
-          const labelText = getLabelText(cb).toLowerCase();
-          if (!cb.checked && (labelText.includes("agree") || labelText.includes("terms") || labelText.includes("accept") || labelText.includes("policy"))) {
-            cb.checked = true;
-            cb.dispatchEvent(new Event("change", { bubbles: true }));
+          if (cb.tabIndex === -1 || cb.offsetParent === null) return;
+          if (!cb.checked) {
+            const label = cb.closest("label");
+            if (label) {
+              label.click();
+            } else {
+              cb.click();
+            }
+            logMessage(`Checked checkbox: "${getLabelText(cb)}"`);
           }
         });
 
-        await sleep(1000);
-
-        // Click next / continue / submit button
-        const continueBtn = Array.from(form.querySelectorAll("button, input[type='submit']")).find(el => {
-          const text = (el.innerText || el.textContent || el.value || "").toLowerCase();
-          return text.includes("continue") || text.includes("next") || text.includes("submit") || text.includes("apply");
-        });
-
-        if (continueBtn) {
-          logMessage("Advancing application form...");
-          continueBtn.click();
-          await sleep(2000);
-        } else {
-          logMessage("No continue button found. Automation stopped.");
-          return false;
+        // 4. Handle Submit/Next button
+        const submitSelectors = [
+          "button[type='submit']",
+          "input[type='submit']",
+          "button.submit-button",
+          "button.btn-primary",
+          ".btn-submit",
+          "button.submit-answers-button",
+          ".submit-answers-button"
+        ];
+        
+        let submitBtn = null;
+        for (const sel of submitSelectors) {
+          const btn = form.querySelector(sel);
+          if (btn && window.isElementVisible(btn)) {
+            submitBtn = btn;
+            break;
+          }
         }
 
-        // Check if submission succeeded
-        const success = Array.from(document.querySelectorAll("h1, h2, h3, h4, p, span")).some(el => {
-          const txt = el.innerText.toLowerCase();
-          return txt.includes("thank you") || txt.includes("submitted") || txt.includes("application complete") || txt.includes("success");
-        });
-        if (success) {
-          logMessage("Application submission confirmed!");
-          return true;
+        if (!submitBtn) {
+          // Find globally in the form by text
+          const formButtons = Array.from(form.querySelectorAll("button, a, input[type='button']"));
+          for (const btn of formButtons) {
+            const text = (btn.textContent || btn.innerText || btn.value || "").toLowerCase().trim();
+            if (text === 'submit' || text === 'submit application' || text === 'next' || text === 'continue' || text === 'send' || text === 'apply for this job' || text === 'apply') {
+              if (window.isElementVisible(btn)) {
+                submitBtn = btn;
+                break;
+              }
+            }
+          }
+        }
+
+        if (submitBtn) {
+          const btnText = (submitBtn.textContent || submitBtn.innerText || submitBtn.value || "").trim();
+          logMessage(`Clicking form action button: "${btnText}"`);
+          window.clickElement(submitBtn);
+          
+          // Wait 3.5 seconds to see if page submits or updates
+          await sleep(3500);
+          
+          // Check if application is complete
+          if (window.location.href.includes("/confirmation") || 
+              window.location.href.includes("/thank-you") || 
+              document.body.innerText.toLowerCase().includes("thank you for applying") || 
+              document.body.innerText.toLowerCase().includes("application submitted") || 
+              document.body.innerText.toLowerCase().includes("application complete") || 
+              window.Connectors.VanHack.isAlreadyApplied()) {
+            logMessage("Application submitted successfully!");
+            return true;
+          }
+        } else {
+          logMessage("Submit button not found. Assuming form requires manual intervention.");
+          return false;
         }
       }
       return false;

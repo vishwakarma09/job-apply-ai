@@ -50,6 +50,7 @@ class JobProfile(Base):
     # Knowledge Base Auto-fill parameters
     phone = Column(String(50), nullable=True)
     email = Column(String(100), nullable=True)
+    city = Column(String(100), nullable=True)
     nationality = Column(String(100), nullable=True)
     visa_sponsorship = Column(String(100), nullable=True)
     disability_status = Column(String(100), nullable=True)

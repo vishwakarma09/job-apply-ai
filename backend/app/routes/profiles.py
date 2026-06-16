@@ -18,6 +18,9 @@ def sync_profile_to_knowledgebase(db: Session, profile: models.JobProfile):
     fields_mapping = {
         "Phone number": profile.phone,
         "Email address": profile.email,
+        "City": profile.city,
+        "Location": profile.city,
+        "Desired job location": profile.city,
         "Nationality / Citizenship": profile.nationality,
         "Do you require visa sponsorship?": profile.visa_sponsorship,
         "Disability status": profile.disability_status,

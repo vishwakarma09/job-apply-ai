@@ -506,6 +506,8 @@ window.Connectors.ZipRecruiter = {
             valueToFill = profile.last_name || "";
           } else if (labelText.includes("city") || labelText.includes("location") || labelText.includes("address")) {
             valueToFill = profile.city || profile.location || "";
+          } else if (labelText.includes("title") || labelText.includes("role") || labelText.includes("position")) {
+            valueToFill = profile.title || "";
           } else if (labelText.includes("zip") || labelText.includes("postal")) {
             const loc = profile.city || profile.location || "";
             const zipMatch = loc.match(/\b\d{5}(-\d{4})?\b/);

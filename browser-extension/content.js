@@ -6,13 +6,13 @@ let ActiveConnector = null;
 // Immediate evaluation log for debugging smartapply tab loading
 debugRemoteLog("Script evaluated on: " + window.location.href);
 
-if (window.location.hostname.includes("indeed.com") || window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com") || window.location.hostname.includes("ziprecruiter.com") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com") || window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1")) {
+if (window.location.hostname.includes("indeed.com") || window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com") || window.location.hostname.includes("ziprecruiter.com") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com") || window.location.hostname.includes("vanhack.com") || window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1")) {
   // Clear turbo state helper
   window.addEventListener("AI_JOB_APPLY_CLEAR_TURBO", () => {
     console.log("[AI Job Apply Content Script] Received request to clear all turbo states.");
     try {
       chrome.storage.local.set({ turbo_mode_active: false });
-      chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state", "jobbank_search_state", "careerbeacon_turbo_state", "careerbeacon_search_state", "indeed_turbo_state"]);
+      chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state", "jobbank_search_state", "careerbeacon_turbo_state", "careerbeacon_search_state", "indeed_turbo_state", "vanhack_turbo_state", "vanhack_search_state"]);
     } catch (e) {
       console.error("[AI Job Apply] Failed to clear turbo states:", e);
     }
@@ -184,7 +184,7 @@ if (window.location.hostname === "localhost" || window.location.hostname === "12
 // ==========================================
 // 3. MAIN WIDGET ENGINE & AUTO-APPLY LOOP
 // ==========================================
-if (window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("indeed.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com") || window.location.hostname.includes("ziprecruiter.com") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com")) {
+if (window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("indeed.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com") || window.location.hostname.includes("ziprecruiter.com") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com") || window.location.hostname.includes("vanhack.com")) {
   if (window.location.hostname.includes("indeed.com")) {
     ActiveConnector = Connectors.Indeed;
   } else if (window.location.hostname.includes("linkedin.com")) {
@@ -201,6 +201,8 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     ActiveConnector = Connectors.JobBank;
   } else if (window.location.hostname.includes("careerbeacon.com")) {
     ActiveConnector = Connectors.CareerBeacon;
+  } else if (window.location.hostname.includes("vanhack.com")) {
+    ActiveConnector = Connectors.VanHack;
   }
   let activeJobId = null;
   let shadowRoot = null;
@@ -435,6 +437,28 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           return;
         }
         continueScraperSetup();
+      });
+      return;
+    }
+
+    if (window.location.hostname.includes("vanhack.com")) {
+      handleVanHackAutoLogin().then(() => {
+        chrome.storage.local.get(["vanhack_turbo_state", "vanhack_search_state"], (res) => {
+          if (!isContextValid()) return;
+          const searchState = res.vanhack_search_state;
+          if (searchState && searchState.active) {
+            console.log("[AI Job Apply] Resuming VanHack Search Automation...", searchState);
+            handleVanHackSearchAutomation(searchState);
+            return;
+          }
+          const state = res.vanhack_turbo_state;
+          if (state && state.active) {
+            console.log("[AI Job Apply] Resuming VanHack Turbo Mode...", state);
+            resumeVanHackTurboMode(state);
+            return;
+          }
+          continueScraperSetup();
+        });
       });
       return;
     }
@@ -679,9 +703,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
 
     function startRegularScraper() {
-      if (window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com")) {
+      if (window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com") || window.location.hostname.includes("vanhack.com")) {
         if (!shadowRoot) {
-          activeJobId = ActiveConnector.getJobId() || (window.location.hostname.includes("greenhouse.io") ? "greenhouse-dashboard" : (window.location.hostname.includes("randstad.ca") ? "randstad-dashboard" : (window.location.hostname.includes("careerbeacon.com") ? "careerbeacon-dashboard" : "jobbank-dashboard")));
+          activeJobId = ActiveConnector.getJobId() || (window.location.hostname.includes("greenhouse.io") ? "greenhouse-dashboard" : (window.location.hostname.includes("randstad.ca") ? "randstad-dashboard" : (window.location.hostname.includes("careerbeacon.com") ? "careerbeacon-dashboard" : (window.location.hostname.includes("vanhack.com") ? "vanhack-dashboard" : "jobbank-dashboard"))));
           scrapeAndShowWidget();
         }
       }
@@ -710,8 +734,8 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
             if (!isContextValid()) return;
             scrapeAndShowWidget();
           }, 1200);
-        } else if (!jobId && (window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com")) && !shadowRoot) {
-          activeJobId = window.location.hostname.includes("greenhouse.io") ? "greenhouse-dashboard" : (window.location.hostname.includes("randstad.ca") ? "randstad-dashboard" : (window.location.hostname.includes("careerbeacon.com") ? "careerbeacon-dashboard" : "jobbank-dashboard"));
+        } else if (!jobId && (window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com") || window.location.hostname.includes("vanhack.com")) && !shadowRoot) {
+          activeJobId = window.location.hostname.includes("greenhouse.io") ? "greenhouse-dashboard" : (window.location.hostname.includes("randstad.ca") ? "randstad-dashboard" : (window.location.hostname.includes("careerbeacon.com") ? "careerbeacon-dashboard" : (window.location.hostname.includes("vanhack.com") ? "vanhack-dashboard" : "jobbank-dashboard")));
           scrapeAndShowWidget();
         }
       }, 1500);
@@ -2896,6 +2920,254 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     window.location.href = nextUrl;
   };
 
+  const handleVanHackSearchAutomation = async (searchState) => {
+    turboRunning = true;
+    if (!shadowRoot) {
+      injectShadowDOM();
+    }
+    const tabDetails = shadowRoot.querySelector("#tab-btn-details");
+    const tabTurbo = shadowRoot.querySelector("#tab-btn-turbo");
+    const panelDetails = shadowRoot.querySelector("#panel-details");
+    const panelTurbo = shadowRoot.querySelector("#panel-turbo");
+    if (tabDetails) tabDetails.classList.remove("active");
+    if (tabTurbo) tabTurbo.classList.add("active");
+    if (panelDetails) panelDetails.style.display = "none";
+    if (panelTurbo) panelTurbo.style.display = "block";
+    
+    const consoleContainer = shadowRoot.querySelector("#turbo-console-container");
+    const consoleBox = shadowRoot.querySelector("#turbo-console");
+    if (consoleContainer) consoleContainer.style.display = "block";
+    
+    const logMessage = (msg, level = "INFO") => {
+      console.log(`[AI Job Apply Turbo] [${level}] ${msg}`);
+      const timestamp = new Date().toLocaleTimeString();
+      if (consoleBox) {
+        consoleBox.innerHTML += `[${timestamp}] ${msg}\n`;
+        consoleBox.scrollTop = consoleBox.scrollHeight;
+      }
+      try {
+        remoteLog(level, msg, "vanhack-search");
+      } catch (err) {}
+    };
+
+    logMessage("VanHack search automation running...");
+    const isSearchPage = window.location.pathname.includes("/jobs") || window.location.pathname.includes("/search");
+    if (!isSearchPage) {
+      logMessage("Not on search page. Direct redirecting to VanHack jobs...");
+      window.location.href = "https://vanhack.com/jobs";
+      return;
+    }
+
+    logMessage("Extracting VanHack job cards...");
+    const jobCards = ActiveConnector.getJobCards();
+    if (jobCards.length === 0) {
+      logMessage("No job listings detected. Waiting 3 seconds...");
+      await sleep(3000);
+    }
+    
+    const links = Array.from(document.querySelectorAll("a"));
+    const jobUrls = [];
+    links.forEach(a => {
+      if (a.href && (a.href.includes("/jobs/") || a.href.includes("/job/")) && !a.href.includes("/jobs-") && !a.href.includes("/jobs/admin")) {
+        const fullUrl = a.href.split("?")[0];
+        if (!jobUrls.includes(fullUrl)) {
+          jobUrls.push(fullUrl);
+        }
+      }
+    });
+
+    if (jobUrls.length === 0) {
+      logMessage("No direct apply jobs found. Stopping.");
+      await new Promise(r => chrome.storage.local.remove(["vanhack_search_state"], r));
+      return;
+    }
+
+    logMessage(`Found ${jobUrls.length} jobs. Initializing VanHack Turbo state...`);
+    const vanhack_turbo_state = {
+      active: true,
+      profile_id: searchState.profile_id,
+      profile_json: searchState.profile_json,
+      limit: searchState.limit,
+      applied_count: 0,
+      listing_page_url: window.location.href,
+      job_urls: jobUrls,
+      current_index: 0,
+      status: "navigating_to_job"
+    };
+
+    chrome.storage.local.remove(["vanhack_search_state"], () => {
+      chrome.storage.local.set({ vanhack_turbo_state: vanhack_turbo_state }, () => {
+        logMessage(`Navigating to first job: ${jobUrls[0]}`);
+        setTimeout(() => {
+          window.location.href = jobUrls[0];
+        }, 1500);
+      });
+    });
+  };
+
+  const resumeVanHackTurboMode = async (state) => {
+    turboRunning = true;
+    
+    if (!shadowRoot) {
+      injectShadowDOM();
+    }
+    
+    const tabDetails = shadowRoot.querySelector("#tab-btn-details");
+    const tabTurbo = shadowRoot.querySelector("#tab-btn-turbo");
+    const panelDetails = shadowRoot.querySelector("#panel-details");
+    const panelTurbo = shadowRoot.querySelector("#panel-turbo");
+    
+    if (tabDetails) tabDetails.classList.remove("active");
+    if (tabTurbo) tabTurbo.classList.add("active");
+    if (panelDetails) panelDetails.style.display = "none";
+    if (panelTurbo) panelTurbo.style.display = "block";
+    
+    const consoleContainer = shadowRoot.querySelector("#turbo-console-container");
+    const consoleBox = shadowRoot.querySelector("#turbo-console");
+    const progressSpan = shadowRoot.querySelector("#turbo-progress");
+    const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+    
+    if (consoleContainer) consoleContainer.style.display = "block";
+    if (progressSpan) progressSpan.innerText = `${state.applied_count}/${state.limit}`;
+    if (turboBtn) {
+      turboBtn.classList.add("danger");
+      turboBtn.innerHTML = "<span>Stop Turbo Mode</span>";
+      turboBtn.dataset.profileJson = state.profile_json;
+    }
+    
+    const logMessage = (msg, level = "INFO") => {
+      console.log(`[AI Job Apply Turbo] [${level}] ${msg}`);
+      const timestamp = new Date().toLocaleTimeString();
+      if (consoleBox) {
+        consoleBox.innerHTML += `[${timestamp}] ${msg}\n`;
+        consoleBox.scrollTop = consoleBox.scrollHeight;
+      }
+      
+      try {
+        const currentJobId = ActiveConnector.getJobId();
+        remoteLog(level, msg, currentJobId);
+      } catch (err) {
+        console.warn("[AI Job Apply] Error sending remote log:", err);
+      }
+    };
+    
+    logMessage(`Resuming Turbo Mode progress: ${state.applied_count}/${state.limit}...`);
+    
+    logMessage("Waiting 3 seconds for job details to render...");
+    await sleep(3000);
+    
+    const jobId = ActiveConnector.getJobId();
+    if (!jobId) {
+      logMessage("Could not retrieve Job ID on current page. Skipping to next job...");
+      state.current_index++;
+      await new Promise(r => chrome.storage.local.set({ vanhack_turbo_state: state }, r));
+      navigateToNextVanHackJob(state, logMessage);
+      return;
+    }
+    
+    const jobData = ActiveConnector.scrapeDetails(jobId);
+    logMessage(`Loaded job: "${jobData.title}" at "${jobData.company_name}"`);
+    
+    if (ActiveConnector.isAlreadyApplied && ActiveConnector.isAlreadyApplied()) {
+      logMessage("Job already marked as 'Applied' on platform. Skipping...");
+      state.applied_count++;
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "Applied");
+        logMessage("Synced status to Kanban board.");
+      } catch (err) {
+        logMessage(`Database sync failed: ${err.message}`);
+      }
+      
+      await new Promise(r => chrome.storage.local.set({ vanhack_turbo_state: state }, r));
+      navigateToNextVanHackJob(state, logMessage);
+      return;
+    }
+    
+    const easyApplyBtn = ActiveConnector.getEasyApplyButton();
+    if (!easyApplyBtn) {
+      logMessage("No application form or Easy Apply button available. Skipping...");
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "needs-knowledge-graph");
+      } catch (err) {}
+      
+      await new Promise(r => chrome.storage.local.set({ vanhack_turbo_state: state }, r));
+      navigateToNextVanHackJob(state, logMessage);
+      return;
+    }
+    
+    logMessage("Easy Apply option detected! Clicking apply...");
+    window.clickElement(easyApplyBtn);
+    await sleep(2500);
+
+    logMessage("Automating form fill...");
+    const fillSuccess = await ActiveConnector.EasyApply.automate(
+      JSON.parse(state.profile_json),
+      logMessage,
+      () => turboRunning && isContextValid()
+    );
+    
+    if (!fillSuccess) {
+      logMessage("Application failed, timed out, or was skipped.");
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "needs-knowledge-graph");
+        logMessage("Saved to database with status 'needs-knowledge-graph'.");
+      } catch (err) {}
+      
+      await new Promise(r => chrome.storage.local.set({ vanhack_turbo_state: state }, r));
+      navigateToNextVanHackJob(state, logMessage);
+    } else {
+      logMessage("Application submitted! Syncing details to database...");
+      state.applied_count++;
+      state.current_index++;
+      
+      try {
+        await syncJobToBackend(jobData, state.profile_id, "Applied");
+        logMessage("Synced status to Kanban board.");
+      } catch (err) {}
+      
+      await new Promise(r => chrome.storage.local.set({ vanhack_turbo_state: state }, r));
+      navigateToNextVanHackJob(state, logMessage);
+    }
+  };
+  
+  const navigateToNextVanHackJob = async (state, logMessage) => {
+    if (!turboRunning || !isContextValid()) {
+      logMessage("Turbo Mode stopped by user. Aborting navigation.");
+      return;
+    }
+    if (state.applied_count >= state.limit || state.current_index >= state.job_urls.length) {
+      logMessage(`Turbo run finished! Applied to ${state.applied_count}/${state.limit} jobs.`);
+      
+      await new Promise(r => chrome.storage.local.remove(["vanhack_turbo_state"], r));
+      turboRunning = false;
+      
+      const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+      if (turboBtn) {
+        turboBtn.classList.remove("danger");
+        turboBtn.innerHTML = "<span>Turbo Run Complete!</span>";
+        setTimeout(() => {
+          turboBtn.innerHTML = "<span>Launch Turbo Mode</span>";
+        }, 3000);
+      }
+      
+      logMessage("Navigating back to main jobs listing...");
+      await sleep(2500);
+      window.location.href = state.listing_page_url;
+      return;
+    }
+    
+    const nextUrl = state.job_urls[state.current_index];
+    logMessage(`Navigating to next job URL in 3 seconds: ${nextUrl}`);
+    await sleep(3000);
+    window.location.href = nextUrl;
+  };
+
   const resumeZipRecruiterTurboMode = async (state) => {
     turboRunning = true;
     
@@ -3511,6 +3783,45 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       return;
     }
 
+    if (window.location.hostname.includes("vanhack.com")) {
+      const links = Array.from(document.querySelectorAll("a"));
+      const jobUrls = [];
+      links.forEach(a => {
+        if (a.href && (a.href.includes("/jobs/") || a.href.includes("/job/")) && !a.href.includes("/jobs-") && !a.href.includes("/jobs/admin")) {
+          const fullUrl = a.href.split("?")[0];
+          if (!jobUrls.includes(fullUrl)) {
+            jobUrls.push(fullUrl);
+          }
+        }
+      });
+
+      if (jobUrls.length === 0) {
+        logMessage("No job application URLs found on current page!");
+        stopTurboApply();
+        return;
+      }
+
+      logMessage(`Found ${jobUrls.length} job URLs. Initializing VanHack Multi-Job Turbo Mode...`);
+
+      const vanhack_turbo_state = {
+        active: true,
+        profile_id: profile.id,
+        profile_json: profileJsonStr,
+        limit: limit,
+        applied_count: 0,
+        listing_page_url: window.location.href,
+        job_urls: jobUrls,
+        current_index: 0,
+        status: "navigating_to_job"
+      };
+
+      await new Promise(r => chrome.storage.local.set({ vanhack_turbo_state: vanhack_turbo_state }, r));
+      logMessage(`Navigating to first job URL in 1.5 seconds: ${jobUrls[0]}`);
+      await sleep(1500);
+      window.location.href = jobUrls[0];
+      return;
+    }
+
     // retry phase: check database for retryable jobs with status 'needs-knowledge-graph'
     try {
       logMessage("Checking database for retryable jobs with status 'needs-knowledge-graph'...");
@@ -3810,6 +4121,103 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     chrome.storage.local.set({ turbo_mode_active: false });
     chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state", "jobbank_search_state", "careerbeacon_turbo_state", "careerbeacon_search_state", "indeed_turbo_state"]);
     updateWidgetUI();
+  };
+
+  // Auto login helper for VanHack
+  const handleVanHackAutoLogin = async () => {
+    if (!window.location.hostname.includes("vanhack.com")) return;
+    
+    // Check if we are already logged in. If we don't see any "LOG IN" link or sign in button, we are probably logged in.
+    const hasLoginButton = Array.from(document.querySelectorAll('a, button, span')).some(el => {
+      const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
+      return text === 'log in' || text === 'login' || text === 'sign in';
+    });
+    
+    const emailInput = document.querySelector('input[type="email"], input[name="email"], input[id*="email"]');
+    const passwordInput = document.querySelector('input[type="password"], input[name="password"]');
+    
+    if (!hasLoginButton && !emailInput) {
+      console.log("[AI Job Apply] Already logged in to VanHack.");
+      return;
+    }
+    
+    // Get token and API URL from local storage
+    const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+    const token = storage.token;
+    const api = storage.apiUrl || "http://localhost:8000";
+    if (!token) return;
+    
+    try {
+      console.log("[AI Job Apply] Fetching VanHack credentials from backend...");
+      const connectors = await fetchBackend(`${api}/api/connectors`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      
+      const vanhackConnector = connectors.find(c => c.platform_name === "VanHack" && c.status === "Connected");
+      if (!vanhackConnector || !vanhackConnector.credentials_json) {
+        console.log("[AI Job Apply] VanHack connector is not configured/connected.");
+        return;
+      }
+      
+      let credentials = null;
+      try {
+        credentials = JSON.parse(vanhackConnector.credentials_json);
+      } catch (e) {
+        console.warn("[AI Job Apply] Failed to parse VanHack credentials JSON.");
+        return;
+      }
+      
+      if (!credentials || !credentials.username || !credentials.password) {
+        console.log("[AI Job Apply] VanHack credentials username/password missing.");
+        return;
+      }
+      
+      // If we are on a page with email and password inputs, auto-fill and submit
+      if (emailInput && passwordInput) {
+        console.log("[AI Job Apply] VanHack login page detected. Filling credentials...");
+        emailInput.value = credentials.username;
+        emailInput.dispatchEvent(new Event("input", { bubbles: true }));
+        emailInput.dispatchEvent(new Event("change", { bubbles: true }));
+        
+        await new Promise(r => setTimeout(r, 500));
+        
+        passwordInput.value = credentials.password;
+        passwordInput.dispatchEvent(new Event("input", { bubbles: true }));
+        passwordInput.dispatchEvent(new Event("change", { bubbles: true }));
+        
+        await new Promise(r => setTimeout(r, 500));
+        
+        // Find and click submit/login button
+        const submitBtn = document.querySelector('button[type="submit"], input[type="submit"]') || 
+                          Array.from(document.querySelectorAll('button, a')).find(el => {
+                            const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
+                            return text === 'log in' || text === 'login' || text === 'sign in';
+                          });
+                          
+        if (submitBtn) {
+          console.log("[AI Job Apply] Submitting VanHack login form...");
+          window.clickElement(submitBtn);
+          // Wait to navigate/reload
+          await new Promise(r => setTimeout(r, 4000));
+        }
+      } else {
+        // We are on VanHack but not on the login page itself, and the "LOG IN" button is visible.
+        // Let's find the "LOG IN" link and click it to go to the login page.
+        const loginLink = Array.from(document.querySelectorAll('a')).find(a => {
+          const text = a.innerText ? a.innerText.trim().toLowerCase() : '';
+          return text === 'log in' || text === 'login';
+        });
+        
+        if (loginLink) {
+          console.log("[AI Job Apply] Clicking VanHack 'LOG IN' button to navigate to login page...");
+          window.clickElement(loginLink);
+          // Wait to navigate
+          await new Promise(r => setTimeout(r, 4000));
+        }
+      }
+    } catch (err) {
+      console.warn("[AI Job Apply] VanHack auto-login failed:", err);
+    }
   };
 
   // Sync details of a successful application to FastAPI

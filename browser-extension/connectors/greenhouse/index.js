@@ -555,8 +555,10 @@ window.Connectors.Greenhouse = {
             else if (lowerVal === "indian") countryVal = "India";
             else if (lowerVal === "british") countryVal = "United Kingdom";
             valueToFill = countryVal;
-          } else if (labelText.includes("location") || labelText.includes("city")) {
-            valueToFill = "Toronto";
+          } else if (labelText.includes("location") || labelText.includes("city") || labelText.includes("address")) {
+            valueToFill = profile.city || "";
+          } else if (labelText.includes("title") || labelText.includes("role") || labelText.includes("position")) {
+            valueToFill = profile.title || "";
           } else if (labelText.includes("nationality") || labelText.includes("citizen")) {
             valueToFill = profile.nationality || "";
           } else if (labelText.includes("work authorization") || labelText.includes("legally authorized") || labelText.includes("eligible to work")) {
