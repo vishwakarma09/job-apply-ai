@@ -20,6 +20,7 @@ class User(Base):
     resumes = relationship("Resume", back_populates="user", cascade="all, delete-orphan")
     job_profiles = relationship("JobProfile", back_populates="user", cascade="all, delete-orphan")
     connectors = relationship("Connector", back_populates="user", cascade="all, delete-orphan")
+    email_credential = relationship("EmailCredential", back_populates="user", uselist=False, cascade="all, delete-orphan")
     applied_jobs = relationship("AppliedJob", back_populates="user", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="user", cascade="all, delete-orphan")
 
@@ -223,3 +224,28 @@ class UserKnowledgebase(Base):
 
     # Relationships
     user = relationship("User")
+
+class EmailCredential(Base):
+    __tablename__ = "email_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    email_provider = Column(String(50), nullable=False, default="Gmail") # Gmail, Other
+    email = Column(String(100), nullable=False)
+
+    # SMTP Settings
+    smtp_host = Column(String(100), nullable=False, default="smtp.gmail.com")
+    smtp_port = Column(Integer, nullable=False, default=587)
+    encrypted_smtp_password = Column(String(500), nullable=False)
+
+    # IMAP Settings
+    imap_host = Column(String(100), nullable=False, default="imap.gmail.com")
+    imap_port = Column(Integer, nullable=False, default=993)
+    encrypted_imap_password = Column(String(500), nullable=False)
+
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="email_credential")
+

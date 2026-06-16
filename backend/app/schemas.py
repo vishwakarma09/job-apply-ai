@@ -272,3 +272,47 @@ class UserKnowledgebaseResponse(UserKnowledgebaseBase):
     class Config:
         from_attributes = True
 
+
+# --- EmailCredential Schemas ---
+class EmailCredentialBase(BaseModel):
+    email_provider: str = "Gmail"
+    email: EmailStr
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    imap_host: str = "imap.gmail.com"
+    imap_port: int = 993
+
+class EmailCredentialCreate(EmailCredentialBase):
+    smtp_password: str
+    imap_password: str
+
+class EmailCredentialUpdate(BaseModel):
+    email_provider: Optional[str] = None
+    email: Optional[EmailStr] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_password: Optional[str] = None
+    imap_host: Optional[str] = None
+    imap_port: Optional[int] = None
+    imap_password: Optional[str] = None
+
+class EmailCredentialResponse(EmailCredentialBase):
+    id: int
+    user_id: int
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+class EmailCredentialTestRequest(BaseModel):
+    email_provider: str
+    email: EmailStr
+    smtp_host: str
+    smtp_port: int
+    smtp_password: str
+    imap_host: str
+    imap_port: int
+    imap_password: str
+
+

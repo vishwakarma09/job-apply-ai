@@ -122,6 +122,30 @@ export const connectorsAPI = {
   }
 };
 
+export const emailCredentialsAPI = {
+  get: async () => {
+    const response = await api.get("/api/email-credentials");
+    return response.data;
+  },
+  save: async (data) => {
+    const response = await api.post("/api/email-credentials", data);
+    return response.data;
+  },
+  delete: async () => {
+    const response = await api.delete("/api/email-credentials");
+    return response.data;
+  },
+  test: async (data) => {
+    const response = await api.post("/api/email-credentials/test", data);
+    return response.data;
+  },
+  pollOtp: async (filters) => {
+    const response = await api.post("/api/email-credentials/poll-otp", null, { params: filters });
+    return response.data;
+  }
+};
+
+
 export const jobsAPI = {
   getAll: async () => {
     const response = await api.get("/api/jobs");
