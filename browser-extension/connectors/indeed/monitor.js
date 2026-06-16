@@ -56,6 +56,7 @@ setTimeout(async () => {
     if (!page) {
       page = await context.newPage();
     }
+    // Cookies will not be cleared so that we can reuse the existing logged-in session.
 
     // Stream browser console logs and errors to simulation terminal
     page.on('console', msg => {
@@ -75,20 +76,113 @@ setTimeout(async () => {
       });
     });
 
-    console.log("Navigating to indeed.com...");
-    await page.goto('https://www.indeed.com/', { waitUntil: 'domcontentloaded' }).catch(e => {
+    console.log("Navigating to Indeed Sign-In page...");
+    await page.goto('https://secure.indeed.com/auth', { waitUntil: 'domcontentloaded' }).catch(e => {
       console.log("Navigation warning:", e.message);
     });
+    
+    await page.waitForTimeout(4000);
 
-    // Auto-launch Turbo Mode sequence
+    const currentUrl = page.url();
+    const emailSelector = 'input[type="email"], input[name="__email"], input[id*="email"]';
+    const isEmailVisible = await page.locator(emailSelector).isVisible({ timeout: 3000 }).catch(() => false);
+    
+    // Check if we are already logged in (redirected away from login page or email input is not visible)
+    if ((!currentUrl.includes("secure.indeed.com/auth") && !currentUrl.includes("secure.indeed.com/account/login")) || !isEmailVisible) {
+      console.log(`Already logged in to Indeed (URL: ${currentUrl}). Skipping login sequence.`);
+    } else {
+      // 1. Enter email ID
+      console.log("Entering email ID...");
+      console.log(`Debug URL: ${currentUrl}`);
+      console.log(`Debug Title: ${await page.title().catch(() => 'no title')}`);
+      await page.waitForSelector(emailSelector, { timeout: 10000 });
+      await page.fill(emailSelector, 'kkumar.sandeep89@gmail.com');
+      
+      console.log("Submitting email...");
+      const submitBtnSelector = 'button[type="submit"]';
+      await page.click(submitBtnSelector);
+      await page.waitForTimeout(4000);
+      
+      // 2. Check for reCAPTCHA or security checks
+      let isRecaptchaVisible = await page.locator('iframe[src*="recaptcha"], .g-recaptcha, #g-recaptcha-response').isVisible().catch(() => false);
+      if (isRecaptchaVisible) {
+        console.log("[RECAPTCHA] reCAPTCHA detected! Please solve the captcha in the Google Chrome window...");
+        while (isRecaptchaVisible) {
+          await page.waitForTimeout(2000);
+          isRecaptchaVisible = await page.locator('iframe[src*="recaptcha"], .g-recaptcha, #g-recaptcha-response').isVisible().catch(() => false);
+          const urlCheck = page.url();
+          if (!urlCheck.includes("/auth") || urlCheck.includes("/postauthfunnel")) {
+            break;
+          }
+        }
+        console.log("reCAPTCHA solved or bypassed! Resuming login sequence...");
+        await page.waitForTimeout(4000);
+      }
+      
+      // 3. Check for password screen vs OTP code option
+      const useCodeBtn = page.locator('button:has-text("code"), a:has-text("code"), button:has-text("link"), a:has-text("link"), [class*="link"]:has-text("code")');
+      if (await useCodeBtn.count() > 0) {
+        console.log("Clicking 'Send a login code' / 'Sign in with code' option...");
+        await useCodeBtn.first().click();
+        await page.waitForTimeout(4000);
+      } else {
+        const passwordInputSelector = 'input[type="password"]';
+        const isPasswordVisible = await page.locator(passwordInputSelector).isVisible({ timeout: 2000 }).catch(() => false);
+        if (isPasswordVisible) {
+          console.log("Password screen visible. Trying password fallback...");
+          await page.fill(passwordInputSelector, 'password');
+          await page.click('button[type="submit"]');
+          await page.waitForTimeout(4000);
+        }
+      }
+      
+      // 4. Poll OTP and fill code
+      console.log("Waiting for verification code screen...");
+      try {
+        const otpInputSelector = 'input[type="text"], input[type="tel"], input[id*="code"], input[name*="code"]';
+        await page.waitForSelector(otpInputSelector, { timeout: 30000 });
+        
+        console.log("Verification code screen loaded. Fetching JWT token from backend...");
+        const token = await getBackendToken();
+        console.log("Backend JWT token obtained. Polling backend for OTP...");
+        
+        const otp = await pollOtp(token);
+        console.log(`Received OTP: ${otp}. Entering code...`);
+        
+        const inputs = page.locator(otpInputSelector);
+        const count = await inputs.count();
+        if (count === 1) {
+          await inputs.fill(otp);
+        } else if (count > 1) {
+          for (let i = 0; i < Math.min(count, otp.length); i++) {
+            await inputs.nth(i).fill(otp[i]);
+          }
+        } else {
+          await page.keyboard.type(otp);
+        }
+        
+        await page.waitForTimeout(1000);
+        console.log("Submitting verification code...");
+        const verifyBtn = page.locator('button[type="submit"]:visible, button:has-text("Verify"):visible, button:has-text("Sign in"):visible').first();
+        await verifyBtn.click();
+        
+        console.log("Waiting for redirect after verification...");
+        await page.waitForTimeout(8000);
+      } catch (err) {
+        console.log("OTP flow warning/error (might be already signed in or using password):", err.message);
+      }
+    }
+
+    // Now trigger the auto launch turbo mode
+    console.log("Signing in completed. Launching job search and Turbo Mode...");
     autoLaunchTurboMode(page, context).catch(err => {
       console.error("[AutoLaunch] Error in background launcher:", err);
     });
 
     console.log("\n==================================================================");
-    console.log("INSTRUCTIONS FOR USER:");
-    console.log("1. Please log in to your Indeed account in the newly opened Chrome window.");
-    console.log("2. Search for a job and click the 'Apply Now' or 'Easy Apply' button.");
+    console.log("INSTRUCTIONS:");
+    console.log("1. The simulation is running in the opened Chrome window.");
+    console.log("2. The script will automatically log in, search for jobs, and trigger Turbo Apply.");
     console.log("3. The script will monitor the page and automatically log each step.");
     console.log("4. Press Enter or type 'c' in this terminal to trigger a manual capture.");
     console.log("==================================================================\n");
@@ -289,28 +383,41 @@ async function autoLaunchTurboMode(page, context) {
   let currentUrl = page.url();
   console.log("[AutoLaunch] Current URL:", currentUrl);
   
-  // If we are on Indeed home/landing page (not search results page), perform a search automatically
+  // If we are on Indeed home/landing page (not search results page) or if we are on a search page without a radius limit, navigate directly or perform search
   const isSearchPage = currentUrl.includes("/jobs") || currentUrl.includes("/viewjob") || currentUrl.includes("/rc/clk");
-  if (!isSearchPage) {
-    console.log("[AutoLaunch] On home/landing page. Performing search for 'Software Developer'...");
+  if (!isSearchPage || (currentUrl.includes("/jobs") && !currentUrl.includes("radius="))) {
+    console.log("[AutoLaunch] Not on search results page or missing radius parameter. Navigating directly to Software Developer jobs in Toronto with radius=0...");
     try {
-      const qInput = page.locator('input[name="q"]');
-      await qInput.waitFor({ timeout: 5000 });
-      await qInput.fill("Software Developer");
-      
-      const lInput = page.locator('input[name="l"]');
-      if (await lInput.count() > 0) {
-        await lInput.click();
-        await page.keyboard.press('Meta+A');
-        await page.keyboard.press('Backspace');
-        await lInput.fill("Toronto, ON");
-      }
-      
-      console.log("[AutoLaunch] Submitting search form...");
-      await page.keyboard.press('Enter');
-      await page.waitForNavigation({ waitUntil: 'load', timeout: 10000 }).catch(() => {});
+      await page.goto("https://www.indeed.com/jobs?q=Software+Developer&l=Toronto%2C+ON&radius=0", { waitUntil: 'domcontentloaded', timeout: 25000 });
+      await page.waitForTimeout(4000);
     } catch (e) {
-      console.log("[AutoLaunch] Home page search failed or timed out:", e.message);
+      console.log("[AutoLaunch] Direct navigation failed, trying home page form fallback:", e.message);
+      try {
+        const qInput = page.locator('input[name="q"]');
+        await qInput.waitFor({ timeout: 5000 });
+        await qInput.fill("Software Developer");
+        
+        const lInput = page.locator('input[name="l"]');
+        if (await lInput.count() > 0) {
+          await lInput.click();
+          await page.keyboard.press('Meta+A');
+          await page.keyboard.press('Backspace');
+          await lInput.fill("Toronto, ON");
+        }
+        
+        console.log("[AutoLaunch] Submitting search form...");
+        await page.keyboard.press('Enter');
+        await page.waitForNavigation({ waitUntil: 'load', timeout: 10000 }).catch(() => {});
+        
+        let postFallbackUrl = page.url();
+        if (postFallbackUrl.includes("/jobs") && !postFallbackUrl.includes("radius=")) {
+          console.log("[AutoLaunch] Fallback loaded without radius, appending &radius=0...");
+          await page.goto(postFallbackUrl + "&radius=0", { waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {});
+          await page.waitForTimeout(2000);
+        }
+      } catch (err) {
+        console.log("[AutoLaunch] Fallback search failed or timed out:", err.message);
+      }
     }
   }
 
@@ -382,4 +489,56 @@ async function autoLaunchTurboMode(page, context) {
   } catch (e) {
     console.log("[AutoLaunch] Error during auto launch sequence:", e.message);
   }
+}
+
+async function getBackendToken() {
+  const loginUrl = "http://localhost:8000/api/auth/login";
+  const params = new URLSearchParams();
+  params.append("username", "kkumar.sandeep89@gmail.com");
+  params.append("password", "password");
+
+  const response = await fetch(loginUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: params.toString()
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend login failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+async function pollOtp(token) {
+  const pollUrl = "http://localhost:8000/api/email-credentials/poll-otp?sender_filter=indeed&subject_filter=code";
+  const timeout = 120000;
+  const interval = 5000;
+  const startTime = Date.now();
+
+  console.log("Starting OTP poll from backend...");
+  while (Date.now() - startTime < timeout) {
+    try {
+      const response = await fetch(pollUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.otp) {
+          console.log(`Successfully fetched OTP from backend: ${data.otp}`);
+          return data.otp;
+        }
+      }
+    } catch (err) {
+      console.log("Error polling OTP:", err.message);
+    }
+    await new Promise(r => setTimeout(r, interval));
+  }
+  throw new Error("Timeout polling for OTP");
 }
