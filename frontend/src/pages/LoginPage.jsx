@@ -73,9 +73,7 @@ const LoginPage = () => {
       
       <div className="w-full max-w-md glass-card p-10 rounded-3xl relative z-10 border border-white/10">
         <div className="text-center mb-8">
-          <div className="inline-flex w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20 mb-4">
-            J
-          </div>
+          <img src="/logo.png" alt="AI Job Apply Logo" className="inline-flex w-10 h-10 rounded-xl object-contain shadow-lg shadow-indigo-500/20 mb-4" />
           <h2 className="text-2xl font-black text-white">Sign In</h2>
           <p className="text-sm text-[#908fa0] mt-1">Welcome back to AI Job Apply</p>
         </div>

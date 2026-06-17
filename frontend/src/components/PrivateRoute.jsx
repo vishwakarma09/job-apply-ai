@@ -40,9 +40,7 @@ const PrivateRoute = ({ children }) => {
       <header className="sticky top-0 z-50 w-full glass-card border-x-0 border-t-0 border-white/5 bg-[#0A0A0A]/70 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
-              J
-            </div>
+            <img src="/logo.png" alt="AI Job Apply Logo" className="w-8 h-8 rounded-lg object-contain shadow-lg shadow-indigo-500/20" />
             <span className="font-bold text-lg tracking-wider text-white">AI Job Apply</span>
           </Link>
           
