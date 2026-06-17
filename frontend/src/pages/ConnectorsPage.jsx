@@ -15,7 +15,8 @@ import {
   X, 
   AlertCircle,
   Edit2,
-  HelpCircle
+  HelpCircle,
+  Play
 } from "lucide-react";
 
 const ConnectorsPage = () => {
@@ -95,7 +96,9 @@ const ConnectorsPage = () => {
     e.preventDefault();
     try {
       let credentialsJson = "";
-      if (authMethod === "cookie") {
+      if (["Indeed", "ZipRecruiter", "Glassdoor", "Greenhouse", "Randstad"].includes(selectedPlatform)) {
+        credentialsJson = JSON.stringify({ auth_method: "credentials" });
+      } else if (authMethod === "cookie") {
         credentialsJson = JSON.stringify({ token: credentials, auth_method: "cookie" });
       } else {
         credentialsJson = JSON.stringify({ 
@@ -107,7 +110,7 @@ const ConnectorsPage = () => {
       }
 
       const existingConn = connectors.find(c => c.platform_name === selectedPlatform);
-      const targetStatus = modalMode === "connect" ? "Connected" : (existingConn ? existingConn.status : "Not Connected");
+      const targetStatus = "Connected";
 
       if (existingConn) {
         await connectorsAPI.update(existingConn.id, {
@@ -280,6 +283,9 @@ const ConnectorsPage = () => {
       setPassword("");
       setModalQuestions([]);
     }
+    if (["LinkedIn", "Job Bank", "CareerBeacon", "VanHack", "Indeed", "ZipRecruiter", "Glassdoor", "Greenhouse", "Randstad"].includes(platformName)) {
+      setAuthMethod("credentials");
+    }
     setShowModal(true);
   };
 
@@ -304,6 +310,56 @@ const ConnectorsPage = () => {
 
   const hasSmsOtpSupport = (platformName) => {
     return ["LinkedIn", "Indeed"].includes(platformName);
+  };
+
+  const isSetupComplete = (platformName) => {
+    const activeConn = connectors.find(c => c.platform_name === platformName);
+    
+    // Check IMAP requirements first
+    const imapRequiredPlatforms = ["Indeed", "ZipRecruiter", "Glassdoor", "Greenhouse", "Randstad"];
+    if (imapRequiredPlatforms.includes(platformName)) {
+      return !!emailCreds;
+    }
+    
+    // Check username/password requirements
+    if (!activeConn || !activeConn.credentials_json) return false;
+    
+    try {
+      const creds = JSON.parse(activeConn.credentials_json);
+      if (creds.auth_method !== "credentials") return false;
+      if (!creds.username || !creds.password) return false;
+      
+      if (platformName === "Job Bank") {
+        // Requires security questions
+        return Array.isArray(creds.security_questions) && creds.security_questions.length > 0;
+      }
+      
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleAutoLoginAndApply = (platformName) => {
+    const urls = {
+      LinkedIn: "https://www.linkedin.com/jobs/",
+      Indeed: "https://www.indeed.com/jobs",
+      ZipRecruiter: "https://www.ziprecruiter.com/",
+      Glassdoor: "https://www.glassdoor.com/",
+      Greenhouse: "https://my.greenhouse.io/",
+      Randstad: "https://www.randstad.ca/",
+      "Job Bank": "https://www.jobbank.gc.ca/",
+      CareerBeacon: "https://www.careerbeacon.com/",
+      VanHack: "https://vanhack.com/jobs"
+    };
+    
+    const targetUrl = urls[platformName] || "https://google.com";
+    
+    window.postMessage({
+      type: "AI_JOB_APPLY_START_AUTO_LOGIN",
+      platformName,
+      targetUrl
+    }, "*");
   };
 
   const platforms = [
@@ -420,14 +476,14 @@ const ConnectorsPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {platforms.map((plat) => {
               const activeConn = connectors.find(c => c.platform_name === plat.name);
-              const isConnected = activeConn && activeConn.status === "Connected";
-              const isDisconnected = activeConn && activeConn.status === "Not Connected";
+              const isSetup = isSetupComplete(plat.name);
+              const isEmailOtpOnly = ["Indeed", "ZipRecruiter", "Glassdoor", "Greenhouse", "Randstad"].includes(plat.name);
               
               return (
                 <div 
                   key={plat.name} 
                   className={`glass-card p-6 rounded-2xl border transition-all flex flex-col justify-between min-h-[240px] ${
-                    isConnected ? "border-indigo-500/20 bg-indigo-500/[0.01]" : isDisconnected ? "border-amber-500/20 bg-amber-500/[0.01]" : "border-white/5 bg-black/20"
+                    isSetup ? "border-indigo-500/20 bg-indigo-500/[0.01]" : "border-white/5 bg-black/20"
                   }`}
                 >
                   <div>
@@ -439,18 +495,14 @@ const ConnectorsPage = () => {
                         <div>
                           <h3 className="text-base font-bold text-white">{plat.name}</h3>
                           <p className="text-[10px] text-[#908fa0] mt-0.5 font-mono">
-                            {activeConn ? getAuthMethodInfo(activeConn) : "Not Configured"}
+                            {isSetup ? (activeConn ? getAuthMethodInfo(activeConn) : "Email OTP (Global)") : "Not Configured"}
                           </p>
                         </div>
                       </div>
                       
-                      {isConnected ? (
+                      {isSetup ? (
                         <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full flex items-center gap-1">
                           <CheckCircle2 size={12} /> Connected
-                        </span>
-                      ) : isDisconnected ? (
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full flex items-center gap-1">
-                          <AlertCircle size={12} /> Disconnected
                         </span>
                       ) : (
                         <span className="text-[10px] uppercase font-bold tracking-wider text-white/40 bg-white/5 border border-white/10 px-3 py-1 rounded-full">
@@ -461,13 +513,11 @@ const ConnectorsPage = () => {
 
                     <div className="mt-4 flex flex-col gap-1.5">
                       <p className="text-xs text-[#908fa0]">
-                        {isConnected 
+                        {isSetup 
                           ? `Status: Active syncing applications every 6 hours.` 
-                          : isDisconnected
-                          ? "Credentials saved. Click Connect to enable auto-sync."
                           : "Integrate to scan boards and apply using active profile."}
                       </p>
-                      {isConnected && activeConn.last_sync_at && (
+                      {isSetup && activeConn && activeConn.last_sync_at && (
                         <span className="text-[10px] text-indigo-300 font-mono">
                           Last Sync: {new Date(activeConn.last_sync_at).toLocaleString()}
                         </span>
@@ -479,7 +529,7 @@ const ConnectorsPage = () => {
                       <div className="flex justify-between items-center">
                         <span className="text-white/40">Auth Mechanism:</span>
                         <span className="text-indigo-300 font-medium font-mono">
-                          {activeConn ? getAuthMethodName(activeConn) : getSupportedAuthMethods(plat.name)}
+                          {isEmailOtpOnly ? "Email OTP" : (activeConn ? getAuthMethodName(activeConn) : getSupportedAuthMethods(plat.name))}
                         </span>
                       </div>
                       
@@ -508,74 +558,28 @@ const ConnectorsPage = () => {
                   </div>
 
                   <div className="mt-5 pt-4 border-t border-white/5 flex flex-wrap items-center justify-between gap-3">
-                    {isConnected ? (
-                      <>
-                        <div className="flex items-center gap-3">
-                          <button 
-                            onClick={() => handleSync(plat.name)}
-                            disabled={syncingPlatform === plat.name}
-                            className="text-xs font-semibold text-indigo-400 hover:text-white flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                          >
-                            <RefreshCw size={14} className={syncingPlatform === plat.name ? "animate-spin" : ""} />
-                            {syncingPlatform === plat.name ? "Syncing..." : "Sync Now"}
-                          </button>
-                          <button 
-                            onClick={() => {
-                              setModalMode("edit");
-                              openPlatformModal(plat.name, activeConn);
-                            }}
-                            className="text-xs font-semibold text-white/60 hover:text-white flex items-center gap-1.5 transition-colors"
-                          >
-                            <Settings2 size={14} /> Credentials
-                          </button>
-                        </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {isSetup && (
                         <button 
-                          onClick={() => handleDisconnect(activeConn.id)}
-                          className="text-xs font-semibold text-[#908fa0] hover:text-rose-400 flex items-center gap-1.5 transition-colors"
+                          onClick={() => handleAutoLoginAndApply(plat.name)}
+                          className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all text-white"
                         >
-                          <X size={14} /> Disconnect
+                          <Play size={12} fill="currentColor" /> Auto Login & Apply
                         </button>
-                      </>
-                    ) : isDisconnected ? (
-                      <>
-                        <div className="flex items-center gap-3">
-                          <button 
-                            onClick={() => {
-                              setModalMode("connect");
-                              openPlatformModal(plat.name, activeConn);
-                            }}
-                            className="glow-btn text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"
-                          >
-                            <CheckCircle2 size={14} /> Connect
-                          </button>
-                          <button 
-                            onClick={() => {
-                              setModalMode("edit");
-                              openPlatformModal(plat.name, activeConn);
-                            }}
-                            className="text-xs font-semibold text-white/60 hover:text-white flex items-center gap-1.5 transition-colors"
-                          >
-                            <Settings2 size={14} /> View/Edit
-                          </button>
-                        </div>
+                      )}
+                      
+                      {!isEmailOtpOnly && (
                         <button 
-                          onClick={() => handleClearCredentials(activeConn.id)}
-                          className="text-xs font-semibold text-[#908fa0] hover:text-rose-400 flex items-center gap-1.5 transition-colors"
+                          onClick={() => {
+                            setModalMode(activeConn ? "edit" : "connect");
+                            openPlatformModal(plat.name, activeConn);
+                          }}
+                          className="text-xs font-semibold text-white/60 hover:text-white flex items-center gap-1.5 transition-colors bg-white/5 px-3 py-1.5 rounded-lg border border-white/10"
                         >
-                          <Trash2 size={14} /> Clear
+                          <Settings2 size={14} /> Credentials
                         </button>
-                      </>
-                    ) : (
-                      <button 
-                        onClick={() => {
-                          setModalMode("connect");
-                          openPlatformModal(plat.name);
-                        }}
-                        className="glow-btn text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5"
-                      >
-                        <Plus size={14} /> Connect Account
-                      </button>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -596,25 +600,47 @@ const ConnectorsPage = () => {
               </p>
             </div>
 
-            <div className="flex border-b border-white/10">
-              <button 
-                type="button"
-                onClick={() => setAuthMethod("cookie")}
-                className={`flex-1 pb-3 text-xs font-bold transition-colors ${authMethod === "cookie" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-[#908fa0] hover:text-white"}`}
-              >
-                Session Cookie / Token
-              </button>
-              <button 
-                type="button"
-                onClick={() => setAuthMethod("credentials")}
-                className={`flex-1 pb-3 text-xs font-bold transition-colors ${authMethod === "credentials" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-[#908fa0] hover:text-white"}`}
-              >
-                Username & Password
-              </button>
-            </div>
+            {/* Tab selector */}
+            {!["LinkedIn", "Job Bank", "CareerBeacon", "VanHack", "Indeed", "ZipRecruiter", "Glassdoor", "Greenhouse", "Randstad"].includes(selectedPlatform) && (
+              <div className="flex border-b border-white/10">
+                <button 
+                  type="button"
+                  onClick={() => setAuthMethod("cookie")}
+                  className={`flex-1 pb-3 text-xs font-bold transition-colors ${authMethod === "cookie" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-[#908fa0] hover:text-white"}`}
+                >
+                  Session Cookie / Token
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setAuthMethod("credentials")}
+                  className={`flex-1 pb-3 text-xs font-bold transition-colors ${authMethod === "credentials" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-[#908fa0] hover:text-white"}`}
+                >
+                  Username & Password
+                </button>
+              </div>
+            )}
 
             <form onSubmit={handleConnect} className="flex flex-col gap-4">
-              {authMethod === "cookie" ? (
+              {["Indeed", "ZipRecruiter", "Glassdoor", "Greenhouse", "Randstad"].includes(selectedPlatform) ? (
+                <div className="flex flex-col gap-3 py-2 text-center">
+                  <div className="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto mb-2">
+                    <Mail size={24} />
+                  </div>
+                  <p className="text-sm font-bold text-white">Email OTP Automation Setup</p>
+                  <p className="text-xs text-[#908fa0] leading-relaxed max-w-sm mx-auto">
+                    {selectedPlatform} login is automated using verification codes sent to your inbox.
+                  </p>
+                  {emailCreds ? (
+                    <div className="mt-2 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl inline-block mx-auto">
+                      ✓ Email OTP Inbox is Active ({emailCreds.email})
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl inline-block mx-auto">
+                      ⚠ Email OTP Setup is Required. Please configure the Email OTP card on the dashboard.
+                    </div>
+                  )}
+                </div>
+              ) : authMethod === "cookie" ? (
                 <div className="flex flex-col gap-1.5">
                   <div className="flex justify-between items-center">
                     <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Session Token / Key</label>
@@ -672,7 +698,8 @@ const ConnectorsPage = () => {
                   </div>
 
                   {/* Security Questions section inside the modal */}
-                  <div className="mt-3 border-t border-white/5 pt-3 flex flex-col gap-2.5">
+                  {selectedPlatform === "Job Bank" && (
+                    <div className="mt-3 border-t border-white/5 pt-3 flex flex-col gap-2.5">
                     <div className="flex justify-between items-center">
                       <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Security Questions</label>
                       {!showModalAddForm && (
@@ -780,6 +807,7 @@ const ConnectorsPage = () => {
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
               )}
 

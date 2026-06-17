@@ -171,6 +171,22 @@ if (window.location.hostname === "localhost" || window.location.hostname === "12
   // Sync immediately and monitor on interval
   syncToken();
   syncInterval = setInterval(syncToken, 2000);
+
+  // Handle start auto login & apply request from dashboard
+  window.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "AI_JOB_APPLY_START_AUTO_LOGIN") {
+      const { platformName, targetUrl } = event.data;
+      console.log(`[AI Job Apply] Received start request for ${platformName} via postMessage`);
+      
+      if (!isContextValid()) return;
+      
+      chrome.storage.local.set({
+        [`auto_start_apply_${platformName}`]: true
+      }, () => {
+        chrome.runtime.sendMessage({ action: "openTab", url: targetUrl });
+      });
+    }
+  });
 }
 
 // 2. MODULAR PLATFORM CONNECTORS FRAMEWORK
@@ -249,9 +265,60 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
   };
 
 
+  const triggerAutoStartApply = async (platformName) => {
+    if (!isContextValid()) return;
+    try {
+      const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+      const token = storage.token;
+      const api = storage.apiUrl || API_DEFAULT_URL;
+      if (!token) {
+        console.warn("[AI Job Apply] Cannot auto-start apply: No API token.");
+        return;
+      }
+
+      console.log(`[AI Job Apply] Auto-starting application flow for ${platformName}...`);
+      const profile = await fetchBackend(`${api}/api/profiles/active`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      if (!profile) {
+        console.warn("[AI Job Apply] Cannot auto-start apply: No active profile found.");
+        return;
+      }
+
+      const resumedState = {
+        active: true,
+        profile_id: profile.id,
+        profile_json: JSON.stringify(profile),
+        limit: 10,
+        applied_count: 0,
+        processed_jks: []
+      };
+
+      await startTurboApply(resumedState);
+    } catch (err) {
+      console.error("[AI Job Apply] Failed to auto-start apply:", err);
+    }
+  };
+
   // Poll for job changes since LinkedIn is a SPA
   const initScraper = async () => {
     await runAutoLogin();
+
+    // Check for auto-start apply flag
+    const currentPlatform = getPlatformNameFromHostname(window.location.hostname);
+    if (currentPlatform) {
+      chrome.storage.local.get([`auto_start_apply_${currentPlatform}`], (res) => {
+        if (!isContextValid()) return;
+        if (res[`auto_start_apply_${currentPlatform}`]) {
+          if (isAlreadyLoggedIn(currentPlatform)) {
+            chrome.storage.local.remove([`auto_start_apply_${currentPlatform}`], () => {
+              triggerAutoStartApply(currentPlatform);
+            });
+          }
+        }
+      });
+    }
 
     if (window.location.hostname.includes("indeed.com") && !window.location.hostname.includes("smartapply.indeed.com") && !window.location.hostname.includes("profile.indeed.com")) {
       chrome.storage.local.get(["indeed_turbo_state"], (res) => {
@@ -3475,17 +3542,17 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       appliedCount = resumedState.applied_count;
       processedJks = resumedState.processed_jks || [];
     } else {
-      const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+      const turboBtn = shadowRoot ? shadowRoot.querySelector("#btn-start-turbo") : null;
       profileJsonStr = turboBtn ? turboBtn.dataset.profileJson : null;
       if (!profileJsonStr) return;
       profile = JSON.parse(profileJsonStr);
-      const limitSelect = shadowRoot.querySelector("#turbo-limit");
+      const limitSelect = shadowRoot ? shadowRoot.querySelector("#turbo-limit") : null;
       limit = parseInt(limitSelect ? limitSelect.value : "10");
       appliedCount = 0;
       processedJks = [];
     }
 
-    const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+    const turboBtn = shadowRoot ? shadowRoot.querySelector("#btn-start-turbo") : null;
 
     turboRunning = true;
     chrome.runtime.sendMessage({ action: "setMasterTab" });
@@ -3496,9 +3563,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     chrome.storage.local.set({ turbo_mode_active: true });
     
     // Clear and show console
-    const consoleContainer = shadowRoot.querySelector("#turbo-console-container");
-    const consoleBox = shadowRoot.querySelector("#turbo-console");
-    const progressSpan = shadowRoot.querySelector("#turbo-progress");
+    const consoleContainer = shadowRoot ? shadowRoot.querySelector("#turbo-console-container") : null;
+    const consoleBox = shadowRoot ? shadowRoot.querySelector("#turbo-console") : null;
+    const progressSpan = shadowRoot ? shadowRoot.querySelector("#turbo-progress") : null;
     
     if (consoleContainer) consoleContainer.style.display = "block";
     if (resumedState) {
@@ -4113,7 +4180,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     turboRunning = false;
     if (!isContextValid()) return;
     
-    const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+    const turboBtn = shadowRoot ? shadowRoot.querySelector("#btn-start-turbo") : null;
     if (turboBtn) {
       turboBtn.classList.remove("danger");
       turboBtn.innerHTML = "<span>Launch Turbo Mode</span>";
@@ -4183,33 +4250,33 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     return sum;
   };
 
+  // Helper to check if we are already logged in
+  const isAlreadyLoggedIn = (platform) => {
+    // If there's a password field on the page, we are not logged in
+    const hasPasswordInput = !!document.querySelector('input[type="password"]');
+    if (hasPasswordInput) return false;
+
+    // Special case: check if we are on a security question screen (e.g. Job Bank)
+    if (platform === "Job Bank") {
+      const hasSecurityInput = !!document.querySelector('input[id*="security"], input[name*="answer"], input[id*="answer"], input[name="securityAnswer"], input#securityAnswer');
+      if (hasSecurityInput) return false; // Security questions prompt is not fully logged in
+    }
+
+    // Check for common sign in/log in links and buttons
+    const hasLoginButton = Array.from(document.querySelectorAll('a, button, span')).some(el => {
+      const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
+      return text === 'log in' || text === 'login' || text === 'sign in' || text === 'log into your account';
+    });
+
+    return !hasLoginButton;
+  };
+
   // Automated Login Agent supporting all platforms and security challenges
   const runAutoLogin = async () => {
     const platform = getPlatformNameFromHostname(window.location.hostname);
     if (!platform) return;
 
-    // Helper to check if we are already logged in
-    const isAlreadyLoggedIn = () => {
-      // If there's a password field on the page, we are not logged in
-      const hasPasswordInput = !!document.querySelector('input[type="password"]');
-      if (hasPasswordInput) return false;
-
-      // Special case: check if we are on a security question screen (e.g. Job Bank)
-      if (platform === "Job Bank") {
-        const hasSecurityInput = !!document.querySelector('input[id*="security"], input[name*="answer"], input[id*="answer"], input[name="securityAnswer"], input#securityAnswer');
-        if (hasSecurityInput) return false; // Security questions prompt is not fully logged in
-      }
-
-      // Check for common sign in/log in links and buttons
-      const hasLoginButton = Array.from(document.querySelectorAll('a, button, span')).some(el => {
-        const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
-        return text === 'log in' || text === 'login' || text === 'sign in' || text === 'log into your account';
-      });
-
-      return !hasLoginButton;
-    };
-
-    if (isAlreadyLoggedIn()) {
+    if (isAlreadyLoggedIn(platform)) {
       console.log(`[AI Job Apply] Already logged in to ${platform}.`);
       return;
     }
