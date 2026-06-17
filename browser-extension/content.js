@@ -250,7 +250,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
 
 
   // Poll for job changes since LinkedIn is a SPA
-  const initScraper = () => {
+  const initScraper = async () => {
+    await runAutoLogin();
+
     if (window.location.hostname.includes("indeed.com") && !window.location.hostname.includes("smartapply.indeed.com") && !window.location.hostname.includes("profile.indeed.com")) {
       chrome.storage.local.get(["indeed_turbo_state"], (res) => {
         if (!isContextValid()) return;
@@ -442,23 +444,21 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
 
     if (window.location.hostname.includes("vanhack.com")) {
-      handleVanHackAutoLogin().then(() => {
-        chrome.storage.local.get(["vanhack_turbo_state", "vanhack_search_state"], (res) => {
-          if (!isContextValid()) return;
-          const searchState = res.vanhack_search_state;
-          if (searchState && searchState.active) {
-            console.log("[AI Job Apply] Resuming VanHack Search Automation...", searchState);
-            handleVanHackSearchAutomation(searchState);
-            return;
-          }
-          const state = res.vanhack_turbo_state;
-          if (state && state.active) {
-            console.log("[AI Job Apply] Resuming VanHack Turbo Mode...", state);
-            resumeVanHackTurboMode(state);
-            return;
-          }
-          continueScraperSetup();
-        });
+      chrome.storage.local.get(["vanhack_turbo_state", "vanhack_search_state"], (res) => {
+        if (!isContextValid()) return;
+        const searchState = res.vanhack_search_state;
+        if (searchState && searchState.active) {
+          console.log("[AI Job Apply] Resuming VanHack Search Automation...", searchState);
+          handleVanHackSearchAutomation(searchState);
+          return;
+        }
+        const state = res.vanhack_turbo_state;
+        if (state && state.active) {
+          console.log("[AI Job Apply] Resuming VanHack Turbo Mode...", state);
+          resumeVanHackTurboMode(state);
+          return;
+        }
+        continueScraperSetup();
       });
       return;
     }
@@ -4123,58 +4123,175 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     updateWidgetUI();
   };
 
-  // Auto login helper for VanHack
-  const handleVanHackAutoLogin = async () => {
-    if (!window.location.hostname.includes("vanhack.com")) return;
-    
-    // Check if we are already logged in. If we don't see any "LOG IN" link or sign in button, we are probably logged in.
-    const hasLoginButton = Array.from(document.querySelectorAll('a, button, span')).some(el => {
-      const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
-      return text === 'log in' || text === 'login' || text === 'sign in';
-    });
-    
-    const emailInput = document.querySelector('input[type="email"], input[name="email"], input[id*="email"]');
-    const passwordInput = document.querySelector('input[type="password"], input[name="password"]');
-    
-    if (!hasLoginButton && !emailInput) {
-      console.log("[AI Job Apply] Already logged in to VanHack.");
+  // Helper to map hostname to connector platform name
+  const getPlatformNameFromHostname = (hostname) => {
+    if (hostname.includes("linkedin.com")) return "LinkedIn";
+    if (hostname.includes("indeed.com")) return "Indeed";
+    if (hostname.includes("ziprecruiter.com")) return "ZipRecruiter";
+    if (hostname.includes("glassdoor.com") || hostname.includes("glassdoor.ca")) return "Glassdoor";
+    if (hostname.includes("greenhouse.io")) return "Greenhouse";
+    if (hostname.includes("randstad.ca")) return "Randstad";
+    if (hostname.includes("jobbank.gc.ca")) return "Job Bank";
+    if (hostname.includes("careerbeacon.com")) return "CareerBeacon";
+    if (hostname.includes("vanhack.com")) return "VanHack";
+    return null;
+  };
+
+  // Automated Login Agent supporting all platforms and security challenges
+  const runAutoLogin = async () => {
+    const platform = getPlatformNameFromHostname(window.location.hostname);
+    if (!platform) return;
+
+    // Helper to check if we are already logged in
+    const isAlreadyLoggedIn = () => {
+      // If there's a password field on the page, we are not logged in
+      const hasPasswordInput = !!document.querySelector('input[type="password"]');
+      if (hasPasswordInput) return false;
+
+      // Special case: check if we are on a security question screen (e.g. Job Bank)
+      if (platform === "Job Bank") {
+        const hasSecurityInput = !!document.querySelector('input[id*="security"], input[name*="answer"], input[id*="answer"], input[name="securityAnswer"], input#securityAnswer');
+        if (hasSecurityInput) return false; // Security questions prompt is not fully logged in
+      }
+
+      // Check for common sign in/log in links and buttons
+      const hasLoginButton = Array.from(document.querySelectorAll('a, button, span')).some(el => {
+        const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
+        return text === 'log in' || text === 'login' || text === 'sign in' || text === 'log into your account';
+      });
+
+      return !hasLoginButton;
+    };
+
+    if (isAlreadyLoggedIn()) {
+      console.log(`[AI Job Apply] Already logged in to ${platform}.`);
       return;
     }
-    
-    // Get token and API URL from local storage
-    const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
-    const token = storage.token;
-    const api = storage.apiUrl || "http://localhost:8000";
-    if (!token) return;
-    
-    try {
-      console.log("[AI Job Apply] Fetching VanHack credentials from backend...");
-      const connectors = await fetchBackend(`${api}/api/connectors`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      
-      const vanhackConnector = connectors.find(c => c.platform_name === "VanHack" && c.status === "Connected");
-      if (!vanhackConnector || !vanhackConnector.credentials_json) {
-        console.log("[AI Job Apply] VanHack connector is not configured/connected.");
+
+    // Attempt loop prevention in session storage
+    const attemptKey = `login_attempt_${platform}`;
+    const secAttemptKey = `security_attempt_${platform}`;
+
+    // 1. Check for Security Questions Page (Job Bank, etc.)
+    const securityInput = document.querySelector('input[id*="security"], input[name*="answer"], input[id*="answer"], input[name="securityAnswer"], input#securityAnswer');
+    if (securityInput) {
+      if (sessionStorage.getItem(secAttemptKey)) {
+        console.log(`[AI Job Apply] Security question already attempted for ${platform} in this session. Skipping to avoid infinite loops.`);
         return;
       }
+
+      console.log(`[AI Job Apply] Security question page detected for ${platform}.`);
       
-      let credentials = null;
+      // Attempt to extract the question text from the page
+      let questionText = "";
+      const label = document.querySelector('label[for*="Answer"], label[for*="security"], label[for*="question"]');
+      if (label && label.innerText) {
+        questionText = label.innerText;
+      } else {
+        // Fallback: search visible headers and paragraphs for "?"
+        const candidates = Array.from(document.querySelectorAll('label, p, h2, h3, legend, div.form-group, span'));
+        for (const cand of candidates) {
+          const text = cand.innerText ? cand.innerText.trim() : "";
+          if (text.includes("?") && text.length < 200) {
+            questionText = text;
+            break;
+          }
+        }
+      }
+
+      if (questionText) {
+        console.log(`[AI Job Apply] Found security question: "${questionText}"`);
+        
+        // Fetch connector details from the backend to get security questions list
+        const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+        const token = storage.token;
+        const api = storage.apiUrl || "http://localhost:8000";
+        if (!token) return;
+
+        try {
+          const connectors = await fetchBackend(`${api}/api/connectors`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          const connector = connectors.find(c => c.platform_name === platform && c.status === "Connected");
+          if (connector && connector.credentials_json) {
+            const credentials = JSON.parse(connector.credentials_json);
+            const savedQuestions = credentials.security_questions || [];
+            
+            const cleanString = (str) => str.toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+            const cleanPageQuestion = cleanString(questionText);
+            
+            const matched = savedQuestions.find(sq => {
+              if (!sq.question) return false;
+              const cleanSaved = cleanString(sq.question);
+              return cleanPageQuestion.includes(cleanSaved) || cleanSaved.includes(cleanPageQuestion);
+            });
+
+            if (matched && matched.answer) {
+              console.log(`[AI Job Apply] Matched security question! Filling answer...`);
+              securityInput.value = matched.answer;
+              securityInput.dispatchEvent(new Event("input", { bubbles: true }));
+              securityInput.dispatchEvent(new Event("change", { bubbles: true }));
+              
+              sessionStorage.setItem(secAttemptKey, 'true');
+              await new Promise(r => setTimeout(r, 1000));
+              
+              const submitBtn = document.querySelector('button[type="submit"], input[type="submit"], button[id*="submit"], input[id*="submit"]');
+              if (submitBtn) {
+                console.log(`[AI Job Apply] Submitting security answer...`);
+                window.clickElement(submitBtn);
+                await new Promise(r => setTimeout(r, 4000));
+              }
+              return;
+            } else {
+              console.warn(`[AI Job Apply] No matching answer found for question: "${questionText}"`);
+            }
+          }
+        } catch (e) {
+          console.warn("[AI Job Apply] Error retrieving security questions:", e);
+        }
+      }
+      return;
+    }
+
+    // 2. Check for Username & Password Login Page
+    const emailInput = document.querySelector('input[type="email"], input[name="email"], input[id*="email"], input[name="session_key"], input#username, input#ifr-email, input[name*="username"]');
+    const passwordInput = document.querySelector('input[type="password"], input[name="password"], input#password, input#ifr-password, input[name*="password"]');
+
+    if (emailInput && passwordInput) {
+      if (sessionStorage.getItem(attemptKey)) {
+        console.log(`[AI Job Apply] Login credentials already attempted for ${platform} in this session. Skipping.`);
+        return;
+      }
+
+      const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+      const token = storage.token;
+      const api = storage.apiUrl || "http://localhost:8000";
+      if (!token) return;
+
       try {
-        credentials = JSON.parse(vanhackConnector.credentials_json);
-      } catch (e) {
-        console.warn("[AI Job Apply] Failed to parse VanHack credentials JSON.");
-        return;
-      }
-      
-      if (!credentials || !credentials.username || !credentials.password) {
-        console.log("[AI Job Apply] VanHack credentials username/password missing.");
-        return;
-      }
-      
-      // If we are on a page with email and password inputs, auto-fill and submit
-      if (emailInput && passwordInput) {
-        console.log("[AI Job Apply] VanHack login page detected. Filling credentials...");
+        console.log(`[AI Job Apply] Fetching ${platform} credentials from backend...`);
+        const connectors = await fetchBackend(`${api}/api/connectors`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        
+        const connector = connectors.find(c => c.platform_name === platform && c.status === "Connected");
+        if (!connector || !connector.credentials_json) {
+          console.log(`[AI Job Apply] ${platform} connector is not configured/connected.`);
+          return;
+        }
+        
+        const credentials = JSON.parse(connector.credentials_json);
+        if (!credentials || credentials.auth_method !== "credentials") {
+          console.log(`[AI Job Apply] ${platform} connector is not configured to use Username & Password auth method.`);
+          return;
+        }
+
+        if (!credentials.username || !credentials.password) {
+          console.log(`[AI Job Apply] ${platform} credentials username/password missing.`);
+          return;
+        }
+
+        console.log(`[AI Job Apply] Filling credentials for ${platform}...`);
         emailInput.value = credentials.username;
         emailInput.dispatchEvent(new Event("input", { bubbles: true }));
         emailInput.dispatchEvent(new Event("change", { bubbles: true }));
@@ -4188,35 +4305,65 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         await new Promise(r => setTimeout(r, 500));
         
         // Find and click submit/login button
-        const submitBtn = document.querySelector('button[type="submit"], input[type="submit"]') || 
-                          Array.from(document.querySelectorAll('button, a')).find(el => {
-                            const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
-                            return text === 'log in' || text === 'login' || text === 'sign in';
-                          });
+        const submitSelectors = [
+          'button[type="submit"]',
+          'input[type="submit"]',
+          'button.btn__primary--large',
+          'button[id*="login"]',
+          'input[id*="login"]',
+          'button[data-litms-control-id*="login"]'
+        ];
+        
+        let submitBtn = null;
+        for (const sel of submitSelectors) {
+          submitBtn = document.querySelector(sel);
+          if (submitBtn && window.isElementVisible(submitBtn)) break;
+        }
+
+        if (!submitBtn) {
+          submitBtn = Array.from(document.querySelectorAll('button, a')).find(el => {
+            const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
+            return text === 'log in' || text === 'login' || text === 'sign in';
+          });
+        }
                           
         if (submitBtn) {
-          console.log("[AI Job Apply] Submitting VanHack login form...");
+          console.log(`[AI Job Apply] Submitting ${platform} login form...`);
+          sessionStorage.setItem(attemptKey, 'true');
           window.clickElement(submitBtn);
-          // Wait to navigate/reload
           await new Promise(r => setTimeout(r, 4000));
         }
-      } else {
-        // We are on VanHack but not on the login page itself, and the "LOG IN" button is visible.
-        // Let's find the "LOG IN" link and click it to go to the login page.
-        const loginLink = Array.from(document.querySelectorAll('a')).find(a => {
-          const text = a.innerText ? a.innerText.trim().toLowerCase() : '';
-          return text === 'log in' || text === 'login';
-        });
-        
-        if (loginLink) {
-          console.log("[AI Job Apply] Clicking VanHack 'LOG IN' button to navigate to login page...");
-          window.clickElement(loginLink);
-          // Wait to navigate
-          await new Promise(r => setTimeout(r, 4000));
-        }
+      } catch (err) {
+        console.warn(`[AI Job Apply] ${platform} auto-login failed:`, err);
       }
-    } catch (err) {
-      console.warn("[AI Job Apply] VanHack auto-login failed:", err);
+    } else {
+      // 3. Not on login page, but check if we should navigate to it (if a login link is visible)
+      const loginLinkSelectors = [
+        'a.nav__button-secondary',
+        'a[href*="/login"]',
+        'a[href*="/signin"]',
+        'a[href*="/sign-in"]',
+        'button[data-test="signin-button"]'
+      ];
+
+      let loginLink = null;
+      for (const sel of loginLinkSelectors) {
+        loginLink = document.querySelector(sel);
+        if (loginLink && window.isElementVisible(loginLink)) break;
+      }
+
+      if (!loginLink) {
+        loginLink = Array.from(document.querySelectorAll('a, button')).find(el => {
+          const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
+          return text === 'log in' || text === 'login' || text === 'sign in';
+        });
+      }
+
+      if (loginLink) {
+        console.log(`[AI Job Apply] Clicking login link/button to navigate to login page...`);
+        window.clickElement(loginLink);
+        await new Promise(r => setTimeout(r, 4000));
+      }
     }
   };
 
