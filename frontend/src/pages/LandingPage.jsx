@@ -1,8 +1,10 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Sparkles, Shield, Rocket, Clock, Kanban, CheckCircle } from "lucide-react";
+import { ArrowRight, Sparkles, Shield, Rocket, Clock, Kanban, CheckCircle, Github } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 const LandingPage = () => {
+  const { isAuthenticated } = useAuth();
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-[#e0e3e5] relative overflow-hidden font-sans">
       {/* Background Aura Glowing Effects */}
@@ -18,12 +20,29 @@ const LandingPage = () => {
           </div>
           
           <div className="flex items-center gap-4">
-            <Link to="/login" className="text-sm font-semibold hover:text-white transition-colors">
-              Sign In
-            </Link>
-            <Link to="/register" className="bg-white text-black text-xs font-bold px-4 py-2 rounded-full hover:bg-indigo-500 hover:text-white transition-all duration-300">
-              Register
-            </Link>
+            <a 
+              href="https://github.com/vishwakarma09/job-apply-ai" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-[#908fa0] hover:text-white transition-colors p-1"
+              aria-label="GitHub Repository"
+            >
+              <Github size={20} />
+            </a>
+            {isAuthenticated ? (
+              <Link to="/dashboard" className="bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-full hover:bg-indigo-500 transition-all duration-300">
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link to="/login" className="text-sm font-semibold hover:text-white transition-colors">
+                  Sign In
+                </Link>
+                <Link to="/register" className="bg-white text-black text-xs font-bold px-4 py-2 rounded-full hover:bg-indigo-500 hover:text-white transition-all duration-300">
+                  Register
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -44,9 +63,15 @@ const LandingPage = () => {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link to="/register" className="glow-btn px-8 py-3.5 rounded-full font-bold flex items-center gap-2 w-full sm:w-auto justify-center text-sm">
-            Get Started Now <ArrowRight size={16} />
-          </Link>
+          {isAuthenticated ? (
+            <Link to="/dashboard" className="glow-btn px-8 py-3.5 rounded-full font-bold flex items-center gap-2 w-full sm:w-auto justify-center text-sm">
+              Go to Dashboard <ArrowRight size={16} />
+            </Link>
+          ) : (
+            <Link to="/register" className="glow-btn px-8 py-3.5 rounded-full font-bold flex items-center gap-2 w-full sm:w-auto justify-center text-sm">
+              Get Started Now <ArrowRight size={16} />
+            </Link>
+          )}
           <Link to="/pricing" className="glass-card bg-white/5 border-white/10 px-8 py-3.5 rounded-full font-bold hover:bg-white/10 transition-colors w-full sm:w-auto text-sm">
             View Pricing Plans
           </Link>
@@ -97,9 +122,15 @@ const LandingPage = () => {
           <p className="text-sm text-[#908fa0] mb-8 max-w-md mx-auto">
             Get premium features or run one-time free trials using promocodes. Start applying now.
           </p>
-          <Link to="/register" className="bg-white text-black px-10 py-3.5 rounded-full font-bold hover:bg-indigo-500 hover:text-white transition-all duration-300 inline-block text-sm">
-            Get Started
-          </Link>
+          {isAuthenticated ? (
+            <Link to="/dashboard" className="bg-white text-black px-10 py-3.5 rounded-full font-bold hover:bg-indigo-500 hover:text-white transition-all duration-300 inline-block text-sm">
+              Go to Dashboard
+            </Link>
+          ) : (
+            <Link to="/register" className="bg-white text-black px-10 py-3.5 rounded-full font-bold hover:bg-indigo-500 hover:text-white transition-all duration-300 inline-block text-sm">
+              Get Started
+            </Link>
+          )}
         </div>
       </section>
 

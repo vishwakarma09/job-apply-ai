@@ -1,7 +1,7 @@
 import React from "react";
 import { Navigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { LayoutDashboard, ClipboardList, Cable, User, CreditCard, LogOut } from "lucide-react";
+import { LayoutDashboard, ClipboardList, Cable, User, CreditCard, LogOut, Github } from "lucide-react";
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, loading, logout, user } = useAuth();
@@ -45,6 +45,15 @@ const PrivateRoute = ({ children }) => {
           </Link>
           
           <div className="flex items-center gap-4">
+            <a 
+              href="https://github.com/vishwakarma09/job-apply-ai" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-[#908fa0] hover:text-white transition-colors p-1"
+              aria-label="GitHub Repository"
+            >
+              <Github size={20} />
+            </a>
             <span className="hidden md:inline-block text-xs bg-white/5 border border-white/10 px-3 py-1 rounded-full text-indigo-300 font-semibold">
               {user?.is_premium ? "PRO Subscription" : "Free Trial"}
             </span>

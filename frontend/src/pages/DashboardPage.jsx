@@ -172,7 +172,7 @@ const DashboardPage = () => {
         </h3>
         
         <div className="flex flex-col gap-4">
-          {jobs.slice(0, 3).map(job => (
+          {[...jobs].sort((a, b) => b.id - a.id).slice(0, 3).map(job => (
             <div key={job.id} className="flex items-center justify-between border-b border-white/5 pb-4 last:border-b-0 last:pb-0">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 text-xs">
