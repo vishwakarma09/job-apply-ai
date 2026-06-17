@@ -36,11 +36,13 @@ git fetch origin
 git reset --hard origin/main
 
 # -------------------------------------------------------
-# Configure browser-extension default URLs
+# Configure browser-extension default URLs and package it
 # -------------------------------------------------------
 echo ""
 echo "Configuring browser-extension default URLs from environment..."
 node scripts/config-extension.js .env.production
+echo "Packaging browser-extension for production..."
+./scripts/pack_extension.sh
 
 
 # -------------------------------------------------------
