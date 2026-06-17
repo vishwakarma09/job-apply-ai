@@ -14,6 +14,8 @@ import JobsKanbanPage from "./pages/JobsKanbanPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import PricingPage from "./pages/PricingPage";
 import SupportPage from "./pages/SupportPage";
+import PrivacyPage from "./pages/PrivacyPage";
+
 
 
 function App() {
@@ -27,6 +29,8 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/support" element={<SupportPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+
 
 
           {/* Protected Routes */}

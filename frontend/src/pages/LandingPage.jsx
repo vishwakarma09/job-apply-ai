@@ -414,6 +414,7 @@ const LandingPage = () => {
           <p>© 2026 AI Job Apply. All rights reserved.</p>
           <div className="flex items-center gap-6">
             <Link to="/support" className="hover:text-white transition-colors">Support & FAQs</Link>
+            <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
             <a 
               href="https://github.com/vishwakarma09/job-apply-ai" 
               target="_blank" 
