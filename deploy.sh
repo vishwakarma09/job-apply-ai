@@ -87,7 +87,7 @@ echo "Managing PM2 processes..."
 
 if pm2 list | grep -q "$FRONTEND_APP"; then
     echo "  → '$FRONTEND_APP' is running. Restarting..."
-    pm2 restart "$FRONTEND_APP"
+    pm2 restart "$FRONTEND_APP" --update-env
 else
     echo "  → '$FRONTEND_APP' is not running. Starting via ecosystem config..."
     pm2 start "$ECOSYSTEM_CONFIG" --only "$FRONTEND_APP"
@@ -95,7 +95,7 @@ fi
 
 if pm2 list | grep -q "$BACKEND_APP"; then
     echo "  → '$BACKEND_APP' is running. Restarting..."
-    pm2 restart "$BACKEND_APP"
+    pm2 restart "$BACKEND_APP" --update-env
 else
     echo "  → '$BACKEND_APP' is not running. Starting via ecosystem config..."
     pm2 start "$ECOSYSTEM_CONFIG" --only "$BACKEND_APP"
