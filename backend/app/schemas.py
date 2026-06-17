@@ -350,4 +350,18 @@ class SupportTicketResponse(BaseModel):
         from_attributes = True
 
 
+# --- Chatbot Schemas ---
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    message: str
+    history: Optional[List[ChatMessage]] = None
+
+class ChatResponse(BaseModel):
+    response: str
+
+
+
 

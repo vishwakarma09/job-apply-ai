@@ -212,6 +212,10 @@ export const supportAPI = {
   submitTicket: async (ticketData) => {
     const response = await api.post("/api/support", ticketData);
     return response.data;
+  },
+  chat: async (message, history = []) => {
+    const response = await api.post("/api/support/chat", { message, history });
+    return response.data;
   }
 };
 

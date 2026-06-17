@@ -15,8 +15,7 @@ import JobDetailPage from "./pages/JobDetailPage";
 import PricingPage from "./pages/PricingPage";
 import SupportPage from "./pages/SupportPage";
 import PrivacyPage from "./pages/PrivacyPage";
-
-
+import ChatBubble from "./components/ChatBubble";
 
 function App() {
   return (
@@ -86,6 +85,7 @@ function App() {
           {/* Catch-all Route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <ChatBubble />
       </AuthProvider>
     </Router>
   );
