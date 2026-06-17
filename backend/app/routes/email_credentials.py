@@ -26,12 +26,16 @@ def create_or_update_email_credentials(
 ):
     cleaned_email = email_service.clean_str(payload.email)
     cleaned_smtp_host = email_service.clean_str(payload.smtp_host)
-    cleaned_smtp_pass = email_service.clean_str(payload.smtp_password)
     cleaned_imap_host = email_service.clean_str(payload.imap_host)
-    cleaned_imap_pass = email_service.clean_str(payload.imap_password)
 
-    encrypted_smtp = security_utils.encrypt_password(cleaned_smtp_pass)
-    encrypted_imap = security_utils.encrypt_password(cleaned_imap_pass)
+    smtp_pass = payload.smtp_password
+    imap_pass = payload.imap_password
+
+    # Ignore placeholder values
+    if smtp_pass == "••••••••••••":
+        smtp_pass = None
+    if imap_pass == "••••••••••••":
+        imap_pass = None
 
     existing = db.query(models.EmailCredential).filter(
         models.EmailCredential.user_id == current_user.id
@@ -42,13 +46,18 @@ def create_or_update_email_credentials(
         existing.email = cleaned_email
         existing.smtp_host = cleaned_smtp_host
         existing.smtp_port = payload.smtp_port
-        existing.encrypted_smtp_password = encrypted_smtp
+        if smtp_pass is not None:
+            existing.encrypted_smtp_password = security_utils.encrypt_password(email_service.clean_str(smtp_pass))
         existing.imap_host = cleaned_imap_host
         existing.imap_port = payload.imap_port
-        existing.encrypted_imap_password = encrypted_imap
+        if imap_pass is not None:
+            existing.encrypted_imap_password = security_utils.encrypt_password(email_service.clean_str(imap_pass))
         db.commit()
         db.refresh(existing)
         return existing
+
+    if not smtp_pass or not imap_pass:
+        raise HTTPException(status_code=400, detail="Passwords are required for new email credentials")
 
     new_cred = models.EmailCredential(
         user_id=current_user.id,
@@ -56,10 +65,10 @@ def create_or_update_email_credentials(
         email=cleaned_email,
         smtp_host=cleaned_smtp_host,
         smtp_port=payload.smtp_port,
-        encrypted_smtp_password=encrypted_smtp,
+        encrypted_smtp_password=security_utils.encrypt_password(email_service.clean_str(smtp_pass)),
         imap_host=cleaned_imap_host,
         imap_port=payload.imap_port,
-        encrypted_imap_password=encrypted_imap
+        encrypted_imap_password=security_utils.encrypt_password(email_service.clean_str(imap_pass))
     )
     db.add(new_cred)
     db.commit()
@@ -83,20 +92,39 @@ def delete_email_credentials(
 @router.post("/test")
 def test_credentials(
     payload: schemas.EmailCredentialTestRequest,
-    current_user: models.User = Depends(auth.get_current_user)
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
 ):
+    existing = db.query(models.EmailCredential).filter(
+        models.EmailCredential.user_id == current_user.id
+    ).first()
+
+    smtp_pass = payload.smtp_password
+    if not smtp_pass or smtp_pass == "••••••••••••":
+        if existing:
+            smtp_pass = security_utils.decrypt_password(existing.encrypted_smtp_password)
+        else:
+            smtp_pass = ""
+
+    imap_pass = payload.imap_password
+    if not imap_pass or imap_pass == "••••••••••••":
+        if existing:
+            imap_pass = security_utils.decrypt_password(existing.encrypted_imap_password)
+        else:
+            imap_pass = ""
+
     smtp_ok = email_service.test_smtp_connection(
         payload.smtp_host,
         payload.smtp_port,
         payload.email,
-        payload.smtp_password
+        smtp_pass
     )
     
     imap_ok = email_service.test_imap_connection(
         payload.imap_host,
         payload.imap_port,
         payload.email,
-        payload.imap_password
+        imap_pass
     )
     
     return {

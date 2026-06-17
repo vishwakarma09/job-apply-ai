@@ -285,8 +285,8 @@ class EmailCredentialBase(BaseModel):
     imap_port: int = 993
 
 class EmailCredentialCreate(EmailCredentialBase):
-    smtp_password: str
-    imap_password: str
+    smtp_password: Optional[str] = None
+    imap_password: Optional[str] = None
 
 class EmailCredentialUpdate(BaseModel):
     email_provider: Optional[str] = None
@@ -312,9 +312,9 @@ class EmailCredentialTestRequest(BaseModel):
     email: EmailStr
     smtp_host: str
     smtp_port: int
-    smtp_password: str
+    smtp_password: Optional[str] = None
     imap_host: str
     imap_port: int
-    imap_password: str
+    imap_password: Optional[str] = None
 
 

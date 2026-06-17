@@ -342,8 +342,10 @@ const ConnectorsPage = () => {
                   setEmailAddress(emailCreds.email);
                   setSmtpHost(emailCreds.smtp_host);
                   setSmtpPort(emailCreds.smtp_port);
+                  setSmtpPassword("••••••••••••");
                   setImapHost(emailCreds.imap_host);
                   setImapPort(emailCreds.imap_port);
+                  setImapPassword("••••••••••••");
                   setShowEmailModal(true);
                 }}
                 className="text-xs font-bold px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 flex items-center gap-1.5 transition-colors"
@@ -856,6 +858,8 @@ const ConnectorsPage = () => {
                     type="button"
                     onClick={() => {
                       setShowEmailModal(false);
+                      setSmtpPassword("");
+                      setImapPassword("");
                       setTestResult(null);
                     }}
                     className="text-xs font-semibold text-[#908fa0] hover:text-white px-3 py-2"
