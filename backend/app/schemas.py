@@ -109,7 +109,7 @@ class JobProfileResponse(JobProfileBase):
 class ConnectorBase(BaseModel):
     platform_name: str
     credentials_json: Optional[str] = None
-    status: str = "Not Connected"
+    status: str = "Connected"
 
 class ConnectorCreate(ConnectorBase):
     pass

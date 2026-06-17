@@ -29,7 +29,7 @@ def add_connector(
     if existing:
         # Update credentials instead of creating a new one
         existing.credentials_json = connector_in.credentials_json
-        existing.status = "Connected"
+        existing.status = connector_in.status
         existing.last_sync_at = datetime.datetime.utcnow()
         db.commit()
         db.refresh(existing)
@@ -39,7 +39,7 @@ def add_connector(
         user_id=current_user.id,
         platform_name=connector_in.platform_name,
         credentials_json=connector_in.credentials_json,
-        status="Connected",
+        status=connector_in.status,
         last_sync_at=datetime.datetime.utcnow()
     )
     db.add(connector)
