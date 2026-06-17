@@ -78,6 +78,13 @@ Run the automated integration test suite to verify the authentication, profile u
 python3 backend/test_endpoints.py
 ```
 
+### 4. Packaging the Browser Extension
+To package the browser extension into a clean, lightweight ZIP file ready for uploading to the Chrome Web Store (excluding local cache, temporary browser profiles, and playwright captures), run:
+```bash
+./scripts/pack_extension.sh
+```
+This creates `job-apply-extension.zip` at the root of the project directory.
+
 ---
 
 ## Access Points Reference
