@@ -181,6 +181,37 @@ def test_flows():
     assert status == 400, f"Expected 400 Bad Request for duplicate free trial use, got {status}: {checkout_res_fail}"
     print("One-time use restriction for FREETRIAL verified successfully.")
     
+    print("\n--- Test Flow 6: Change Password ---")
+    # Change password with wrong current password (should return 400)
+    change_pw_fail_payload = {
+        "current_password": "wrong_password",
+        "new_password": "NewPassword@123"
+    }
+    status, change_pw_fail_res = request_json(f"{BASE_URL}/api/auth/change-password", method="POST", data=change_pw_fail_payload, headers=auth_headers)
+    assert status == 400, f"Expected 400 Bad Request for incorrect current password, got {status}: {change_pw_fail_res}"
+    print("Correctly rejected password update with incorrect current password.")
+
+    # Change password with correct current password (should succeed)
+    change_pw_success_payload = {
+        "current_password": "Password@123",
+        "new_password": "NewPassword@123"
+    }
+    status, change_pw_success_res = request_json(f"{BASE_URL}/api/auth/change-password", method="POST", data=change_pw_success_payload, headers=auth_headers)
+    assert status == 200, f"Expected 200 OK for password update, got {status}: {change_pw_success_res}"
+    print("Successfully changed password.")
+
+    # Try logging in with the old password (should fail)
+    login_data_old = {"username": email, "password": "Password@123"}
+    status, login_res_old = request_json(f"{BASE_URL}/api/auth/login", method="POST", data=login_data_old, headers=login_headers)
+    assert status == 401, f"Expected 401 Unauthorized for old password, got {status}: {login_res_old}"
+    print("Successfully blocked login with old password.")
+
+    # Try logging in with the new password (should succeed)
+    login_data_new = {"username": email, "password": "NewPassword@123"}
+    status, login_res_new = request_json(f"{BASE_URL}/api/auth/login", method="POST", data=login_data_new, headers=login_headers)
+    assert status == 200, f"Login failed with new password: {login_res_new}"
+    print("Successfully logged in with new password!")
+    
     print("\n--- ALL INTEGRATION TESTS COMPLETED SUCCESSFULLY! ---")
 
 if __name__ == "__main__":

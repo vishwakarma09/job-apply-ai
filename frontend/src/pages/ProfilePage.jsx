@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { profilesAPI } from "../services/api";
-import { Upload, Plus, FileText, ToggleLeft, ToggleRight, Trash2, Edit2, AlertCircle } from "lucide-react";
+import { profilesAPI, authAPI } from "../services/api";
+import { Upload, Plus, FileText, ToggleLeft, ToggleRight, Trash2, Edit2, AlertCircle, Key } from "lucide-react";
 
 const ProfilePage = () => {
   const [resumes, setResumes] = useState([]);
@@ -11,6 +11,11 @@ const ProfilePage = () => {
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -81,6 +86,26 @@ const ProfilePage = () => {
       await fetchData();
     } catch (err) {
       alert("Failed to toggle active profile");
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      alert("New passwords do not match");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await authAPI.changePassword(currentPassword, newPassword);
+      alert("Password updated successfully!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to update password");
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -164,6 +189,59 @@ const ProfilePage = () => {
                 className="glow-btn py-2.5 rounded-xl font-bold text-xs"
               >
                 {creating ? "Creating..." : "Create Profile"}
+              </button>
+            </form>
+          </div>
+
+          {/* Change Password */}
+          <div className="glass-card p-6 rounded-2xl border border-white/10 flex flex-col gap-4">
+            <h3 className="text-base font-bold text-white flex items-center gap-1.5">
+              <Key size={18} className="text-indigo-400" /> Change Password
+            </h3>
+            
+            <form onSubmit={handleChangePassword} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Current Password</label>
+                <input 
+                  type="password" 
+                  required
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">New Password</label>
+                <input 
+                  type="password" 
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Confirm New Password</label>
+                <input 
+                  type="password" 
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                />
+              </div>
+
+              <button 
+                type="submit"
+                disabled={changingPassword}
+                className="glow-btn py-2.5 rounded-xl font-bold text-xs"
+              >
+                {changingPassword ? "Updating..." : "Update Password"}
               </button>
             </form>
           </div>

@@ -36,6 +36,10 @@ class TokenData(BaseModel):
 class GoogleSSORequest(BaseModel):
     credential: str
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 # --- Resume Schemas ---
 class ResumeBase(BaseModel):
     filename: str

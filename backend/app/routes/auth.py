@@ -84,3 +84,20 @@ def google_sso(request_in: schemas.GoogleSSORequest, db: Session = Depends(get_d
 @router.get("/me", response_model=schemas.UserResponse)
 def get_me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
+
+@router.post("/change-password")
+def change_password(
+    request_in: schemas.ChangePasswordRequest,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not auth.verify_password(request_in.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect current password"
+        )
+    
+    current_user.hashed_password = auth.get_password_hash(request_in.new_password)
+    db.commit()
+    return {"message": "Password updated successfully"}
+

@@ -55,6 +55,13 @@ export const authAPI = {
   googleSSO: async (credential) => {
     const response = await api.post("/api/auth/google-sso", { credential });
     return response.data;
+  },
+  changePassword: async (currentPassword, newPassword) => {
+    const response = await api.post("/api/auth/change-password", {
+      current_password: currentPassword,
+      new_password: newPassword
+    });
+    return response.data;
   }
 };
 
