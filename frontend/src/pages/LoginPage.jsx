@@ -36,7 +36,7 @@ const LoginPage = () => {
     script.onload = () => {
       if (window.google) {
         window.google.accounts.id.initialize({
-          client_id: "52677516043-hsgbgvt1utri5c2ottm0sa60piv5ilta.apps.googleusercontent.com",
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "266294072267-sbgeptpku49c0ihfcum3c8114ebs042g.apps.googleusercontent.com",
           callback: handleGoogleResponse,
         });
         window.google.accounts.id.renderButton(
