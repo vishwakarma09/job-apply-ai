@@ -20,6 +20,9 @@ class UserResponse(UserBase):
     is_premium: bool
     premium_until: Optional[datetime.datetime] = None
     created_at: datetime.datetime
+    openai_api_key: Optional[str] = None
+    cerebras_api_key: Optional[str] = None
+    preferred_ai_provider: Optional[str] = "default"
 
     class Config:
         from_attributes = True
@@ -39,6 +42,11 @@ class GoogleSSORequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+class UserAPIKeysUpdate(BaseModel):
+    openai_api_key: Optional[str] = None
+    cerebras_api_key: Optional[str] = None
+    preferred_ai_provider: Optional[str] = "default"
 
 # --- Resume Schemas ---
 class ResumeBase(BaseModel):

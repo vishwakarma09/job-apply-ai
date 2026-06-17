@@ -62,6 +62,10 @@ export const authAPI = {
       new_password: newPassword
     });
     return response.data;
+  },
+  updateAPIKeys: async (keysData) => {
+    const response = await api.put("/api/auth/api-keys", keysData);
+    return response.data;
   }
 };
 

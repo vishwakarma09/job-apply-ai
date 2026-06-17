@@ -2,7 +2,65 @@ import httpx
 import json
 from ..config import settings
 
-def generate_cover_letter(resume_text: str, job_description: str) -> str:
+def call_chat_completion(
+    messages: list, 
+    temperature: float, 
+    openai_api_key: str = None, 
+    cerebras_api_key: str = None, 
+    preferred_provider: str = "default"
+) -> str:
+    # Determine routing
+    provider = preferred_provider or "default"
+    if provider == "openai" and openai_api_key:
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {openai_api_key}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "gpt-4o",
+            "messages": messages,
+            "temperature": temperature
+        }
+    elif provider == "cerebras" and cerebras_api_key:
+        url = "https://api.cerebras.ai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {cerebras_api_key}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "gpt-oss-120b",
+            "messages": messages,
+            "temperature": temperature
+        }
+    else:
+        # Fallback to default system Cerebras
+        url = "https://api.cerebras.ai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {settings.CEREBRAS_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "gpt-oss-120b",
+            "messages": messages,
+            "temperature": temperature
+        }
+        
+    with httpx.Client(timeout=30.0) as client:
+        response = client.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            result = response.json()
+            return result["choices"][0]["message"]["content"].strip()
+        else:
+            raise ValueError(f"{provider.capitalize()} API returned status {response.status_code}: {response.text}")
+
+def generate_cover_letter(
+    resume_text: str, 
+    job_description: str,
+    openai_api_key: str = None,
+    cerebras_api_key: str = None,
+    preferred_provider: str = "default"
+) -> str:
     prompt = (
         f"You are a helpful assistant writing a professional, customized cover letter. "
         f"Analyze the following resume and tailor a cover letter specifically for the job description provided below.\n\n"
@@ -12,36 +70,17 @@ def generate_cover_letter(resume_text: str, job_description: str) -> str:
         f"Do not include placeholders like [Date], [Manager Name] - write a clean, ready-to-send cover letter."
     )
     
-    headers = {
-        "Authorization": f"Bearer {settings.CEREBRAS_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    messages = [
+        {"role": "system", "content": "You are a professional career coach and copywriter."},
+        {"role": "user", "content": prompt}
+    ]
     
-    data = {
-        "model": "gpt-oss-120b",
-        "messages": [
-            {"role": "system", "content": "You are a professional career coach and copywriter."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.7
-    }
-    
-    # Try using the Cerebras API endpoint directly
+    # Try using the routed LLM helper
     try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.post(
-                "https://api.cerebras.ai/v1/chat/completions",
-                headers=headers,
-                json=data
-            )
-            if response.status_code == 200:
-                result = response.json()
-                return result["choices"][0]["message"]["content"].strip()
-            else:
-                raise ValueError(f"Cerebras API returned status {response.status_code}: {response.text}")
+        return call_chat_completion(messages, 0.7, openai_api_key, cerebras_api_key, preferred_provider)
     except Exception as e:
         # Fallback helper: return a mock tailored cover letter if API fails/offline in local tests
-        print(f"Cerebras generation failed: {str(e)}. Using fallback mock generation.")
+        print(f"LLM generation failed: {str(e)}. Using fallback mock generation.")
         return (
             f"Dear Hiring Team,\n\n"
             f"I am writing to express my strong interest in the open position. "
@@ -51,7 +90,17 @@ def generate_cover_letter(resume_text: str, job_description: str) -> str:
             f"Sincerely,\nApplicant"
         )
 
-def solve_screen(profile_data: dict, url: str, title: str, heading: str, fields: list, rag_context: list = None) -> dict:
+def solve_screen(
+    profile_data: dict, 
+    url: str, 
+    title: str, 
+    heading: str, 
+    fields: list, 
+    rag_context: list = None,
+    openai_api_key: str = None,
+    cerebras_api_key: str = None,
+    preferred_provider: str = "default"
+) -> dict:
     rag_context_str = ""
     if rag_context:
         rag_context_str = "\n\nPreviously Resolved Questions (RAG Context):\n"
@@ -95,43 +144,24 @@ def solve_screen(profile_data: dict, url: str, title: str, heading: str, fields:
         f"Do not include any thinking, explanations or markdown block formatting. Return raw JSON."
     )
     
-    headers = {
-        "Authorization": f"Bearer {settings.CEREBRAS_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "model": "gpt-oss-120b",
-        "messages": [
-            {"role": "system", "content": "You are a professional form-solving bot."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.2
-    }
+    messages = [
+        {"role": "system", "content": "You are a professional form-solving bot."},
+        {"role": "user", "content": prompt}
+    ]
     
     try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.post(
-                "https://api.cerebras.ai/v1/chat/completions",
-                headers=headers,
-                json=data
-            )
-            if response.status_code == 200:
-                result = response.json()
-                content = result["choices"][0]["message"]["content"].strip()
-                
-                # Strip markdown quotes if LLM returned them
-                if content.startswith("```"):
-                    parts = content.split("```")
-                    if len(parts) > 1:
-                        content = parts[1]
-                        if content.startswith("json"):
-                            content = content[4:]
-                content = content.strip("` \n")
-                
-                return json.loads(content)
-            else:
-                raise ValueError(f"Cerebras API returned status {response.status_code}: {response.text}")
+        content = call_chat_completion(messages, 0.2, openai_api_key, cerebras_api_key, preferred_provider)
+        
+        # Strip markdown quotes if LLM returned them
+        if content.startswith("```"):
+            parts = content.split("```")
+            if len(parts) > 1:
+                content = parts[1]
+                if content.startswith("json"):
+                    content = content[4:]
+        content = content.strip("` \n")
+        
+        return json.loads(content)
     except Exception as e:
         print(f"Cerebras solve_screen failed: {str(e)}. Attempting rule-based/RAG fallback...")
         try:

@@ -101,3 +101,16 @@ def change_password(
     db.commit()
     return {"message": "Password updated successfully"}
 
+@router.put("/api-keys", response_model=schemas.UserResponse)
+def update_api_keys(
+    keys_in: schemas.UserAPIKeysUpdate,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    current_user.openai_api_key = keys_in.openai_api_key
+    current_user.cerebras_api_key = keys_in.cerebras_api_key
+    current_user.preferred_ai_provider = keys_in.preferred_ai_provider
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+

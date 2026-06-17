@@ -15,6 +15,11 @@ class User(Base):
     is_premium = Column(Boolean, default=False)
     premium_until = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    # Per-user AI Connectors
+    openai_api_key = Column(String(255), nullable=True)
+    cerebras_api_key = Column(String(255), nullable=True)
+    preferred_ai_provider = Column(String(50), nullable=True, default="default")
 
     # Relationships
     resumes = relationship("Resume", back_populates="user", cascade="all, delete-orphan")

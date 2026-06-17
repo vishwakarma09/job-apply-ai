@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { profilesAPI, authAPI } from "../services/api";
-import { Upload, Plus, FileText, ToggleLeft, ToggleRight, Trash2, Edit2, AlertCircle, Key } from "lucide-react";
+import { Upload, Plus, FileText, ToggleLeft, ToggleRight, Trash2, Edit2, AlertCircle, Key, Cpu, Eye, EyeOff } from "lucide-react";
 
 const ProfilePage = () => {
   const [resumes, setResumes] = useState([]);
@@ -16,6 +16,14 @@ const ProfilePage = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+
+  // Per-user AI Connectors states
+  const [openaiKey, setOpenaiKey] = useState("");
+  const [cerebrasKey, setCerebrasKey] = useState("");
+  const [preferredProvider, setPreferredProvider] = useState("default");
+  const [savingKeys, setSavingKeys] = useState(false);
+  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [showCerebrasKey, setShowCerebrasKey] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -33,10 +41,33 @@ const ProfilePage = () => {
           setActiveResumeText(matchingResume.extracted_text || "");
         }
       }
+
+      // Fetch user's custom API key preferences
+      const userData = await authAPI.getMe();
+      setOpenaiKey(userData.openai_api_key || "");
+      setCerebrasKey(userData.cerebras_api_key || "");
+      setPreferredProvider(userData.preferred_ai_provider || "default");
     } catch (err) {
-      console.error("Failed to load profiles/resumes:", err);
+      console.error("Failed to load profiles/resumes/user settings:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveAPIKeys = async (e) => {
+    e.preventDefault();
+    setSavingKeys(true);
+    try {
+      await authAPI.updateAPIKeys({
+        openai_api_key: openaiKey,
+        cerebras_api_key: cerebrasKey,
+        preferred_ai_provider: preferredProvider
+      });
+      alert("AI Connector settings saved successfully!");
+    } catch (err) {
+      alert("Failed to save AI Connector settings.");
+    } finally {
+      setSavingKeys(false);
     }
   };
 
@@ -242,6 +273,79 @@ const ProfilePage = () => {
                 className="glow-btn py-2.5 rounded-xl font-bold text-xs"
               >
                 {changingPassword ? "Updating..." : "Update Password"}
+              </button>
+            </form>
+          </div>
+
+          {/* AI Connectors Settings */}
+          <div className="glass-card p-6 rounded-2xl border border-white/10 flex flex-col gap-4">
+            <h3 className="text-base font-bold text-white flex items-center gap-1.5">
+              <Cpu size={18} className="text-indigo-400" /> AI Connectors
+            </h3>
+            <p className="text-[10px] text-[#908fa0] -mt-1 leading-relaxed">
+              Configure your API keys for Cerebras and OpenAI to power resume tailoring and Easy Apply forms.
+            </p>
+            
+            <form onSubmit={handleSaveAPIKeys} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Preferred AI Provider</label>
+                <select 
+                  value={preferredProvider}
+                  onChange={(e) => setPreferredProvider(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                >
+                  <option value="default">System Default (Cerebras)</option>
+                  <option value="cerebras">Custom Cerebras Key</option>
+                  <option value="openai">Custom OpenAI Key (GPT-4o)</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Cerebras API Key</label>
+                <div className="relative">
+                  <input 
+                    type={showCerebrasKey ? "text" : "password"}
+                    value={cerebrasKey}
+                    onChange={(e) => setCerebrasKey(e.target.value)}
+                    placeholder="csk-..."
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-4 pr-10 text-xs focus:outline-none focus:border-indigo-500 text-white font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCerebrasKey(!showCerebrasKey)}
+                    className="absolute right-3 top-2 text-[#908fa0] hover:text-white transition-colors"
+                  >
+                    {showCerebrasKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">OpenAI API Key</label>
+                <div className="relative">
+                  <input 
+                    type={showOpenaiKey ? "text" : "password"}
+                    value={openaiKey}
+                    onChange={(e) => setOpenaiKey(e.target.value)}
+                    placeholder="sk-proj-..."
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-4 pr-10 text-xs focus:outline-none focus:border-indigo-500 text-white font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOpenaiKey(!showOpenaiKey)}
+                    className="absolute right-3 top-2 text-[#908fa0] hover:text-white transition-colors"
+                  >
+                    {showOpenaiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <button 
+                type="submit"
+                disabled={savingKeys}
+                className="glow-btn py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5"
+              >
+                {savingKeys ? "Saving AI Settings..." : "Save AI Connectors"}
               </button>
             </form>
           </div>

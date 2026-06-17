@@ -99,7 +99,10 @@ def generate_cover_letter_endpoint(
         
     cover_letter_content = cerebras_service.generate_cover_letter(
         resume_text=profile.resume.extracted_text or "",
-        job_description=req.job_description
+        job_description=req.job_description,
+        openai_api_key=current_user.openai_api_key,
+        cerebras_api_key=current_user.cerebras_api_key,
+        preferred_provider=current_user.preferred_ai_provider
     )
     
     # Generate PDF in memory using ReportLab
@@ -167,7 +170,10 @@ def tailor_job_application(
     # Call Cerebras Service to tailor cover letter
     cover_letter_content = cerebras_service.generate_cover_letter(
         resume_text=profile.resume.extracted_text or "",
-        job_description=tailor_in.job_description
+        job_description=tailor_in.job_description,
+        openai_api_key=current_user.openai_api_key,
+        cerebras_api_key=current_user.cerebras_api_key,
+        preferred_provider=current_user.preferred_ai_provider
     )
     
     # Save cover letter
@@ -311,7 +317,12 @@ def solve_screen_endpoint(
                     
         # 2. Call AI Solver passing the RAG context
         from ..services import cerebras_service
-        result = cerebras_service.solve_screen(profile_data, url, title, heading, fields, rag_context)
+        result = cerebras_service.solve_screen(
+            profile_data, url, title, heading, fields, rag_context,
+            openai_api_key=current_user.openai_api_key,
+            cerebras_api_key=current_user.cerebras_api_key,
+            preferred_provider=current_user.preferred_ai_provider
+        )
         
         # 3. Auto-learn/cache LLM solver results
         if result and result.get("action") == "fill" and result.get("fields"):
