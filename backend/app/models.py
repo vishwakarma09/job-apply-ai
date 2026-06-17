@@ -83,6 +83,7 @@ class Connector(Base):
 
     # Relationships
     user = relationship("User", back_populates="connectors")
+    security_questions = relationship("ConnectorSecurityQuestion", back_populates="connector", cascade="all, delete-orphan")
 
 class AppliedJob(Base):
     __tablename__ = "applied_jobs"
@@ -249,4 +250,18 @@ class EmailCredential(Base):
 
     # Relationships
     user = relationship("User", back_populates="email_credential")
+
+
+class ConnectorSecurityQuestion(Base):
+    __tablename__ = "connector_security_questions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    connector_id = Column(Integer, ForeignKey("connectors.id", ondelete="CASCADE"), nullable=False)
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    question_embedding = Column(Vector(1536), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Relationships
+    connector = relationship("Connector", back_populates="security_questions")
 

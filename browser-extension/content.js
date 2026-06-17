@@ -4137,6 +4137,52 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     return null;
   };
 
+  // Deterministic local embedding generator (matches backend/app/services/embedding_service.py)
+  const getEmbedding = async (text) => {
+    const vector = new Array(1536).fill(0.0);
+    if (!text) return vector;
+
+    const cleanText = text.toLowerCase().trim();
+    const words = cleanText.match(/[a-z0-9]+/g) || [];
+    
+    if (words.length === 0) {
+      words.push(cleanText);
+    }
+
+    const encoder = new TextEncoder();
+    for (const word of words) {
+      const data = encoder.encode(word);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+      const hashArray = new Uint8Array(hashBuffer);
+      
+      let bigIntVal = 0n;
+      for (const byte of hashArray) {
+        bigIntVal = (bigIntVal << 8n) + BigInt(byte);
+      }
+      
+      const index = Number(bigIntVal % 1536n);
+      vector[index] += 1.0;
+    }
+
+    const magnitude = Math.sqrt(vector.reduce((sum, x) => sum + x * x, 0));
+    if (magnitude > 0) {
+      for (let i = 0; i < 1536; i++) {
+        vector[i] /= magnitude;
+      }
+    }
+
+    return vector;
+  };
+
+  // Cosine similarity between two unit vectors (dot product)
+  const cosineSimilarity = (vecA, vecB) => {
+    let sum = 0;
+    for (let i = 0; i < vecA.length; i++) {
+      sum += vecA[i] * vecB[i];
+    }
+    return sum;
+  };
+
   // Automated Login Agent supporting all platforms and security challenges
   const runAutoLogin = async () => {
     const platform = getPlatformNameFromHostname(window.location.hostname);
@@ -4209,28 +4255,24 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         if (!token) return;
 
         try {
-          const connectors = await fetchBackend(`${api}/api/connectors`, {
-            headers: { "Authorization": `Bearer ${token}` }
+          const matchResult = await fetchBackend(`${api}/api/connectors/match-security-question`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              platform_name: platform,
+              question_text: questionText
+            })
           });
-          const connector = connectors.find(c => c.platform_name === platform && c.status === "Connected");
-          if (connector && connector.credentials_json) {
-            const credentials = JSON.parse(connector.credentials_json);
-            const savedQuestions = credentials.security_questions || [];
-            
-            const cleanString = (str) => str.toLowerCase().replace(/[^a-z0-9]/g, "").trim();
-            const cleanPageQuestion = cleanString(questionText);
-            
-            const matched = savedQuestions.find(sq => {
-              if (!sq.question) return false;
-              const cleanSaved = cleanString(sq.question);
-              return cleanPageQuestion.includes(cleanSaved) || cleanSaved.includes(cleanPageQuestion);
-            });
 
-            if (matched && matched.answer) {
-              console.log(`[AI Job Apply] Matched security question! Filling answer...`);
-              securityInput.value = matched.answer;
-              securityInput.dispatchEvent(new Event("input", { bubbles: true }));
-              securityInput.dispatchEvent(new Event("change", { bubbles: true }));
+          const SIMILARITY_THRESHOLD = 0.60;
+          if (matchResult && matchResult.matched && matchResult.similarity >= SIMILARITY_THRESHOLD && matchResult.answer) {
+            console.log(`[AI Job Apply] Matched security question semantically via pgvector (Similarity: ${matchResult.similarity.toFixed(4)}): "${matchResult.question}". Filling answer...`);
+            securityInput.value = matchResult.answer;
+            securityInput.dispatchEvent(new Event("input", { bubbles: true }));
+            securityInput.dispatchEvent(new Event("change", { bubbles: true }));
               
               sessionStorage.setItem(secAttemptKey, 'true');
               await new Promise(r => setTimeout(r, 1000));
@@ -4245,7 +4287,6 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
             } else {
               console.warn(`[AI Job Apply] No matching answer found for question: "${questionText}"`);
             }
-          }
         } catch (e) {
           console.warn("[AI Job Apply] Error retrieving security questions:", e);
         }

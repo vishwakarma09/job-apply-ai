@@ -23,15 +23,12 @@ const ConnectorsPage = () => {
   const [emailCreds, setEmailCreds] = useState(null);
   const [loading, setLoading] = useState(true);
   
-  // Tab control State
-  const [activeTab, setActiveTab] = useState("platforms"); // platforms or security
-  
-  // Security Questions State
-  const [editingPlatform, setEditingPlatform] = useState(null);
-  const [editingQuestionIdx, setEditingQuestionIdx] = useState(null);
-  const [newQuestion, setNewQuestion] = useState("");
-  const [newAnswer, setNewAnswer] = useState("");
-  const [showAnswers, setShowAnswers] = useState({}); // key: `${platformName}-${index}` -> boolean
+  // Security Questions inside Modal State
+  const [modalQuestions, setModalQuestions] = useState([]);
+  const [modalNewQuestion, setModalNewQuestion] = useState("");
+  const [modalNewAnswer, setModalNewAnswer] = useState("");
+  const [showModalAddForm, setShowModalAddForm] = useState(false);
+  const [showModalAnswers, setShowModalAnswers] = useState({}); // key: index -> boolean
 
   // Platform Modal States
   const [showModal, setShowModal] = useState(false);
@@ -82,71 +79,7 @@ const ConnectorsPage = () => {
     fetchData();
   }, []);
 
-  const handleSaveSecurityQuestion = async (platformName, questionIndex = null) => {
-    if (!newQuestion.trim() || !newAnswer.trim()) {
-      alert("Please fill in both the question and answer.");
-      return;
-    }
 
-    try {
-      const conn = connectors.find(c => c.platform_name === platformName);
-      if (!conn) {
-        alert("Platform is not connected.");
-        return;
-      }
-
-      const creds = JSON.parse(conn.credentials_json || "{}");
-      const questions = [...(creds.security_questions || [])];
-
-      if (questionIndex !== null) {
-        questions[questionIndex] = { question: newQuestion.trim(), answer: newAnswer.trim() };
-      } else {
-        questions.push({ question: newQuestion.trim(), answer: newAnswer.trim() });
-      }
-
-      const updatedCreds = { ...creds, security_questions: questions };
-      
-      await connectorsAPI.update(conn.id, {
-        credentials_json: JSON.stringify(updatedCreds)
-      });
-
-      setEditingPlatform(null);
-      setEditingQuestionIdx(null);
-      setNewQuestion("");
-      setNewAnswer("");
-      
-      await fetchData();
-      alert("Security questions updated successfully!");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to save security question");
-    }
-  };
-
-  const handleDeleteSecurityQuestion = async (platformName, questionIndex) => {
-    if (!confirm("Are you sure you want to delete this security question?")) return;
-
-    try {
-      const conn = connectors.find(c => c.platform_name === platformName);
-      if (!conn) return;
-
-      const creds = JSON.parse(conn.credentials_json || "{}");
-      const questions = [...(creds.security_questions || [])];
-      questions.splice(questionIndex, 1);
-
-      const updatedCreds = { ...creds, security_questions: questions };
-      
-      await connectorsAPI.update(conn.id, {
-        credentials_json: JSON.stringify(updatedCreds)
-      });
-
-      await fetchData();
-      alert("Security question deleted.");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to delete security question");
-    }
-  };
 
   // Sync Gmail defaults when selected
   useEffect(() => {
@@ -165,7 +98,12 @@ const ConnectorsPage = () => {
       if (authMethod === "cookie") {
         credentialsJson = JSON.stringify({ token: credentials, auth_method: "cookie" });
       } else {
-        credentialsJson = JSON.stringify({ username, password, auth_method: "credentials" });
+        credentialsJson = JSON.stringify({ 
+          username, 
+          password, 
+          auth_method: "credentials",
+          security_questions: modalQuestions
+        });
       }
 
       const existingConn = connectors.find(c => c.platform_name === selectedPlatform);
@@ -188,6 +126,10 @@ const ConnectorsPage = () => {
       setCredentials("");
       setUsername("");
       setPassword("");
+      setModalQuestions([]);
+      setModalNewQuestion("");
+      setModalNewAnswer("");
+      setShowModalAddForm(false);
       await fetchData();
       alert(modalMode === "connect" ? "Platform connected successfully!" : "Credentials saved successfully!");
     } catch {
@@ -297,27 +239,46 @@ const ConnectorsPage = () => {
     setSelectedPlatform(platformName);
     setShowPlatformCookie(false);
     setShowPlatformPassword(false);
+    setShowModalAddForm(false);
+    setModalNewQuestion("");
+    setModalNewAnswer("");
+    setShowModalAnswers({});
     if (connector && connector.credentials_json) {
       try {
         const creds = JSON.parse(connector.credentials_json);
-        setAuthMethod(creds.auth_method || "cookie");
-        if (creds.auth_method === "credentials") {
-          setUsername(creds.username || "");
-          setPassword(creds.password || "");
-          setCredentials("");
+        if (creds && typeof creds === "object") {
+          setAuthMethod(creds.auth_method || "cookie");
+          setModalQuestions(Array.isArray(creds.security_questions) ? creds.security_questions : []);
+          if (creds.auth_method === "credentials") {
+            setUsername(creds.username || "");
+            setPassword(creds.password || "");
+            setCredentials("");
+          } else {
+            setCredentials(creds.token || "");
+            setUsername("");
+            setPassword("");
+          }
         } else {
-          setCredentials(creds.token || "");
+          setAuthMethod("cookie");
+          setCredentials(connector.credentials_json);
           setUsername("");
           setPassword("");
+          setModalQuestions([]);
         }
       } catch (e) {
-        console.error("Failed to parse credentials_json:", e);
+        console.warn("Failed to parse credentials_json, treating as legacy raw token:", e);
+        setAuthMethod("cookie");
+        setCredentials(connector.credentials_json || "");
+        setUsername("");
+        setPassword("");
+        setModalQuestions([]);
       }
     } else {
       setAuthMethod((platformName === "VanHack" || platformName === "Job Bank") ? "credentials" : "cookie");
       setCredentials("");
       setUsername("");
       setPassword("");
+      setModalQuestions([]);
     }
     setShowModal(true);
   };
@@ -372,35 +333,7 @@ const ConnectorsPage = () => {
         <p className="text-sm text-[#908fa0] mt-1">Configure credentials and email tools to automate logins and applications</p>
       </div>
 
-      {/* Tab Selector */}
-      <div className="flex border-b border-white/5 mb-6">
-        <button
-          onClick={() => setActiveTab("platforms")}
-          className={`pb-4 px-6 font-bold text-sm transition-colors relative ${
-            activeTab === "platforms" ? "text-indigo-400" : "text-[#908fa0] hover:text-white"
-          }`}
-        >
-          Platform Connectors
-          {activeTab === "platforms" && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("security")}
-          className={`pb-4 px-6 font-bold text-sm transition-colors relative ${
-            activeTab === "security" ? "text-indigo-400" : "text-[#908fa0] hover:text-white"
-          }`}
-        >
-          Security Questions
-          {activeTab === "security" && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
-          )}
-        </button>
-      </div>
-
-      {activeTab === "platforms" && (
-        <>
-          {/* Email OTP Configuration Card */}
+      {/* Email OTP Configuration Card */}
           <div className="glass-card p-8 rounded-2xl border border-white/5 bg-black/20 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center text-white">
@@ -648,186 +581,7 @@ const ConnectorsPage = () => {
               );
             })}
           </div>
-        </>
-      )}
 
-      {activeTab === "security" && (
-        <div className="flex flex-col gap-6">
-          <div>
-            <h2 className="text-xl font-bold text-white">Security Questions Settings</h2>
-            <p className="text-xs text-[#908fa0] mt-1">Configure security questions and answers for platforms with Username/Password logins (e.g. Job Bank)</p>
-          </div>
-
-          {connectors.filter(c => {
-            if (!c.credentials_json) return false;
-            try {
-              const creds = JSON.parse(c.credentials_json);
-              return creds.auth_method === "credentials" && c.status === "Connected";
-            } catch {
-              return false;
-            }
-          }).length === 0 ? (
-            <div className="glass-card p-12 rounded-2xl border border-white/5 bg-black/20 text-center flex flex-col items-center justify-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[#908fa0]">
-                <HelpCircle size={32} />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white">No Connected Platforms using Username & Password</h3>
-                <p className="text-xs text-[#908fa0] mt-1.5 max-w-md mx-auto leading-relaxed">
-                  Security questions can only be configured for accounts connected via the "Username & Password" authentication method. Please connect an account first (such as Job Bank).
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-6">
-              {connectors.filter(c => {
-                if (!c.credentials_json) return false;
-                try {
-                  const creds = JSON.parse(c.credentials_json);
-                  return creds.auth_method === "credentials" && c.status === "Connected";
-                } catch {
-                  return false;
-                }
-              }).map((conn) => {
-                const creds = JSON.parse(conn.credentials_json);
-                const questions = creds.security_questions || [];
-                const platColor = platforms.find(p => p.name === conn.platform_name)?.color || "from-indigo-500 to-purple-600";
-                
-                return (
-                  <div key={conn.id} className="glass-card p-6 rounded-2xl border border-white/5 bg-black/20 flex flex-col gap-6">
-                    <div className="flex justify-between items-center pb-4 border-b border-white/5">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${platColor} flex items-center justify-center text-white font-black text-xs`}>
-                          {conn.platform_name[0]}
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-white">{conn.platform_name} Security Questions</h3>
-                          <p className="text-[10px] text-[#908fa0] mt-0.5">Configure answers to challenges requested during login</p>
-                        </div>
-                      </div>
-                      
-                      {editingPlatform !== conn.platform_name && (
-                        <button
-                          onClick={() => {
-                            setEditingPlatform(conn.platform_name);
-                            setEditingQuestionIdx(null);
-                            setNewQuestion("");
-                            setNewAnswer("");
-                          }}
-                          className="text-xs font-bold px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 flex items-center gap-1 transition-colors"
-                        >
-                          <Plus size={12} /> Add Question
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Inline Form to Add / Edit */}
-                    {editingPlatform === conn.platform_name && (
-                      <div className="p-4 rounded-xl border border-indigo-500/20 bg-indigo-500/[0.02] flex flex-col gap-4">
-                        <h4 className="text-xs font-bold text-indigo-400">
-                          {editingQuestionIdx !== null ? "Edit Security Question" : "Add Security Question"}
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Question</label>
-                            <input
-                              type="text"
-                              value={newQuestion}
-                              onChange={(e) => setNewQuestion(e.target.value)}
-                              placeholder="e.g. What is your mother's maiden name?"
-                              className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-indigo-500"
-                            />
-                          </div>
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Answer</label>
-                            <input
-                              type="text"
-                              value={newAnswer}
-                              onChange={(e) => setNewAnswer(e.target.value)}
-                              placeholder="e.g. Smith"
-                              className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-indigo-500"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex justify-end gap-3">
-                          <button
-                            onClick={() => {
-                              setEditingPlatform(null);
-                              setEditingQuestionIdx(null);
-                              setNewQuestion("");
-                              setNewAnswer("");
-                            }}
-                            className="text-xs font-semibold text-[#908fa0] hover:text-white px-3 py-1.5"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={() => handleSaveSecurityQuestion(conn.platform_name, editingQuestionIdx)}
-                            className="glow-btn text-xs font-bold px-4 py-1.5 rounded-lg"
-                          >
-                            Save Question
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {questions.length === 0 ? (
-                      <p className="text-xs text-[#908fa0] italic py-2">No security questions configured for this platform.</p>
-                    ) : (
-                      <div className="flex flex-col gap-3">
-                        {questions.map((q, idx) => {
-                          const isShowing = showAnswers[`${conn.platform_name}-${idx}`];
-                          return (
-                            <div key={idx} className="p-3.5 rounded-xl border border-white/5 bg-white/[0.01] flex justify-between items-center gap-4 hover:border-white/10 transition-all">
-                              <div className="flex-1 min-w-0">
-                                <span className="text-xs font-bold text-white block truncate">{q.question}</span>
-                                <span className="text-[11px] font-mono text-indigo-300 mt-1 block">
-                                  Answer: {isShowing ? q.answer : "••••••••"}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => setShowAnswers(prev => ({
-                                    ...prev,
-                                    [`${conn.platform_name}-${idx}`]: !prev[`${conn.platform_name}-${idx}`]
-                                  }))}
-                                  className="p-1.5 hover:bg-white/5 text-[#908fa0] hover:text-white rounded-lg transition-colors"
-                                  title={isShowing ? "Hide Answer" : "Show Answer"}
-                                >
-                                  {isShowing ? <EyeOff size={14} /> : <Eye size={14} />}
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setEditingPlatform(conn.platform_name);
-                                    setEditingQuestionIdx(idx);
-                                    setNewQuestion(q.question);
-                                    setNewAnswer(q.answer);
-                                  }}
-                                  className="p-1.5 hover:bg-white/5 text-[#908fa0] hover:text-white rounded-lg transition-colors"
-                                  title="Edit Question"
-                                >
-                                  <Edit2 size={14} />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteSecurityQuestion(conn.platform_name, idx)}
-                                  className="p-1.5 hover:bg-rose-500/10 text-rose-400 rounded-lg transition-colors"
-                                  title="Delete Question"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Platform Connection Modal */}
       {showModal && (
@@ -915,6 +669,116 @@ const ConnectorsPage = () => {
                         {showPlatformPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
                     </div>
+                  </div>
+
+                  {/* Security Questions section inside the modal */}
+                  <div className="mt-3 border-t border-white/5 pt-3 flex flex-col gap-2.5">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Security Questions</label>
+                      {!showModalAddForm && (
+                        <button
+                          type="button"
+                          onClick={() => setShowModalAddForm(true)}
+                          className="text-[10px] text-indigo-400 hover:text-white flex items-center gap-0.5 focus:outline-none font-bold"
+                        >
+                          <Plus size={12} /> Add Question
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Add Question Inline Form */}
+                    {showModalAddForm && (
+                      <div className="p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/[0.02] flex flex-col gap-2">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] font-bold text-[#908fa0] uppercase tracking-wider">Question</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. What is your mother's maiden name?"
+                            value={modalNewQuestion}
+                            onChange={(e) => setModalNewQuestion(e.target.value)}
+                            className="w-full bg-black/40 border border-white/10 rounded-lg py-1.5 px-3 text-xs text-white focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] font-bold text-[#908fa0] uppercase tracking-wider">Answer</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Smith"
+                            value={modalNewAnswer}
+                            onChange={(e) => setModalNewAnswer(e.target.value)}
+                            className="w-full bg-black/40 border border-white/10 rounded-lg py-1.5 px-3 text-xs text-white focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2 mt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowModalAddForm(false);
+                              setModalNewQuestion("");
+                              setModalNewAnswer("");
+                            }}
+                            className="text-[10px] font-semibold text-[#908fa0] hover:text-white px-2 py-1"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!modalNewQuestion.trim() || !modalNewAnswer.trim()) {
+                                alert("Please fill in both the question and answer.");
+                                return;
+                              }
+                              setModalQuestions(prev => [...prev, { question: modalNewQuestion.trim(), answer: modalNewAnswer.trim() }]);
+                              setShowModalAddForm(false);
+                              setModalNewQuestion("");
+                              setModalNewAnswer("");
+                            }}
+                            className="text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-md"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Questions List */}
+                    {!Array.isArray(modalQuestions) || modalQuestions.length === 0 ? (
+                      <p className="text-[11px] text-[#908fa0] italic">No security questions configured. Add some if the platform (e.g. Job Bank) requires them during login.</p>
+                    ) : (
+                      <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-1">
+                        {modalQuestions.map((q, idx) => {
+                          const isShowing = showModalAnswers[idx];
+                          return (
+                            <div key={idx} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.01] flex justify-between items-center gap-2">
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[11px] font-bold text-white block truncate">{q.question}</span>
+                                <span className="text-[10px] font-mono text-indigo-300 block truncate">
+                                  Answer: {isShowing ? q.answer : "••••••••"}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowModalAnswers(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                                  className="p-1 hover:bg-white/5 text-[#908fa0] hover:text-white rounded"
+                                >
+                                  {isShowing ? <EyeOff size={12} /> : <Eye size={12} />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setModalQuestions(prev => prev.filter((_, i) => i !== idx));
+                                  }}
+                                  className="p-1 hover:bg-rose-500/10 text-rose-400 rounded"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
