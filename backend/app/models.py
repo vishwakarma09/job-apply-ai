@@ -270,3 +270,16 @@ class ConnectorSecurityQuestion(Base):
     # Relationships
     connector = relationship("Connector", back_populates="security_questions")
 
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    email = Column(String(100), nullable=False)
+    subject = Column(String(150), nullable=False)
+    message = Column(Text, nullable=False)
+    status = Column(String(50), nullable=False, default="Open") # Open, In Progress, Resolved
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+

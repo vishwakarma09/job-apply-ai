@@ -13,6 +13,8 @@ import ConnectorsPage from "./pages/ConnectorsPage";
 import JobsKanbanPage from "./pages/JobsKanbanPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import PricingPage from "./pages/PricingPage";
+import SupportPage from "./pages/SupportPage";
+
 
 function App() {
   return (
@@ -24,6 +26,8 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/support" element={<SupportPage />} />
+
 
           {/* Protected Routes */}
           <Route

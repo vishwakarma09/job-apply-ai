@@ -207,3 +207,11 @@ export const billingAPI = {
     return response.data;
   }
 };
+
+export const supportAPI = {
+  submitTicket: async (ticketData) => {
+    const response = await api.post("/api/support", ticketData);
+    return response.data;
+  }
+};
+

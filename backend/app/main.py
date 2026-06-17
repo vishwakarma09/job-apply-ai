@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import auth, profiles, connectors, jobs, billing, conversations, email_credentials
+from .routes import auth, profiles, connectors, jobs, billing, conversations, email_credentials, support
 
 app = FastAPI(title="AI Job Apply API", version="1.0.0")
 
@@ -21,6 +21,8 @@ app.include_router(jobs.router)
 app.include_router(billing.router)
 app.include_router(conversations.router)
 app.include_router(email_credentials.router)
+app.include_router(support.router)
+
 
 @app.get("/")
 def read_root():

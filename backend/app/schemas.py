@@ -330,3 +330,24 @@ class EmailCredentialTestRequest(BaseModel):
     imap_password: Optional[str] = None
 
 
+# --- Support Ticket Schemas ---
+class SupportTicketCreate(BaseModel):
+    name: str
+    email: EmailStr
+    subject: str
+    message: str
+
+class SupportTicketResponse(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    subject: str
+    message: str
+    status: str
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+

@@ -212,6 +212,21 @@ def test_flows():
     assert status == 200, f"Login failed with new password: {login_res_new}"
     print("Successfully logged in with new password!")
     
+    print("\n--- Test Flow 7: Support Ticket Submission ---")
+    support_payload = {
+        "name": "Jane Support",
+        "email": "jane@example.com",
+        "subject": "Unable to connect Cerebras API key",
+        "message": "It fails with an invalid key error, but the key is active in Cerebras dashboard."
+    }
+    status, support_res = request_json(f"{BASE_URL}/api/support", method="POST", data=support_payload)
+    assert status == 201, f"Support ticket creation failed: {support_res}"
+    assert support_res["name"] == "Jane Support"
+    assert support_res["subject"] == "Unable to connect Cerebras API key"
+    assert support_res["status"] == "Open"
+    assert "id" in support_res
+    print("Support ticket submission flow verified successfully!")
+    
     print("\n--- ALL INTEGRATION TESTS COMPLETED SUCCESSFULLY! ---")
 
 if __name__ == "__main__":

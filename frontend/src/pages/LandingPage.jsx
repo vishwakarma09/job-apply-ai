@@ -410,7 +410,20 @@ const LandingPage = () => {
 
       {/* Footer */}
       <footer className="w-full py-8 border-t border-white/5 text-center text-xs text-[#908fa0] bg-[#0A0A0A]/50">
-        <p>© 2026 AI Job Apply. All rights reserved.</p>
+        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p>© 2026 AI Job Apply. All rights reserved.</p>
+          <div className="flex items-center gap-6">
+            <Link to="/support" className="hover:text-white transition-colors">Support & FAQs</Link>
+            <a 
+              href="https://github.com/vishwakarma09/job-apply-ai" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="hover:text-white transition-colors"
+            >
+              GitHub
+            </a>
+          </div>
+        </div>
       </footer>
     </div>
   );
