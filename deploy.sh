@@ -32,7 +32,8 @@ echo "Python version: $(python3 --version)"
 echo ""
 echo "[1/4] Pulling latest changes from git..."
 cd "$APP_DIR"
-git pull origin main
+git fetch origin
+git reset --hard origin/main
 
 # -------------------------------------------------------
 # 2. Frontend — install dependencies & build
@@ -41,7 +42,7 @@ echo ""
 echo "[2/4] Installing frontend dependencies & building..."
 cd "$APP_DIR/frontend"
 npm ci --legacy-peer-deps
-VITE_API_URL=/api npm run build
+VITE_API_URL=/ npm run build
 
 # -------------------------------------------------------
 # 3. Backend — sync Python dependencies via uv
