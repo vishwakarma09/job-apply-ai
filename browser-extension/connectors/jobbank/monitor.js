@@ -48,7 +48,19 @@ process.on('SIGINT', () => {
 setTimeout(async () => {
   try {
     console.log("Connecting Playwright to Chrome via CDP...");
-    const browser = await chromium.connectOverCDP('http://localhost:9222');
+    let browser;
+    let retries = 5;
+    while (retries > 0) {
+      try {
+        browser = await chromium.connectOverCDP('http://localhost:9222');
+        break;
+      } catch (err) {
+        retries--;
+        if (retries === 0) throw err;
+        console.log(`Connection failed, retrying in 1.5 seconds... (${retries} retries left)`);
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    }
     
     // Get default context and page
     const context = browser.contexts()[0];

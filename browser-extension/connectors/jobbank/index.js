@@ -253,24 +253,37 @@ window.Connectors.JobBank = {
     ];
     for (const sel of selectors) {
       const btn = document.querySelector(sel);
-      if (btn && window.isElementVisible(btn)) return btn;
+      if (btn && window.isElementVisible(btn) && !btn.disabled && !btn.classList.contains('disabled') && btn.getAttribute('aria-disabled') !== 'true') return btn;
     }
     return null;
   },
 
   isAlreadyApplied() {
+    // Check if the apply button itself is disabled
+    const directApplyBtn = document.querySelector("#btn-direct-apply, button[id*='applyresumesharing'], a[id*='applyresumesharing']");
+    if (directApplyBtn && (directApplyBtn.disabled || directApplyBtn.classList.contains('disabled') || directApplyBtn.getAttribute('aria-disabled') === 'true')) {
+      return true;
+    }
+
     const elements = Array.from(document.querySelectorAll('button, span, div, p, a, h1, h2, h3'));
     for (const el of elements) {
       if (el.children.length === 0) {
         const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
-        if (text === 'applied' || text === 'application submitted' || text === 'submitted' || text.includes('applied on job bank')) {
+        if (
+          text === 'applied' || 
+          text === 'application submitted' || 
+          text === 'submitted' || 
+          text.includes('applied on job bank') ||
+          text.includes('marked it as applied') ||
+          text.includes('previously applied') ||
+          text.includes('already applied')
+        ) {
           return true;
         }
       }
     }
     return false;
   },
-
   // Job Bank Easy Apply workflow automation
   EasyApply: {
     async automate(profile, logMessage, checkRunning, jobId = null) {
@@ -306,7 +319,7 @@ window.Connectors.JobBank = {
           waitCount++;
           
           const isDirectApplyUrl = window.location.href.includes("/directapply") || window.location.href.includes("applyresumesharing");
-          const applyForm = isDirectApplyUrl ? document.querySelector("#applyresumesharing, form:not(#jobsearchform):not(#jobSearchResultsJobSearchForm):not(#reportProblemJobPosting):not(#favouriteaction):not(#markappliedaction):not(#externallinkactivity):not([action*='/jobsearch/jobsearch']):not([action*='/jobsearch/search']):not(.dept-nav):not([name='cse-search-box'])") : null;
+          const applyForm = isDirectApplyUrl ? document.querySelector("#applyresumesharing, #docUploadSPForm, form[id*='docUpload'], form:not(#jobsearchform):not(#jobSearchResultsJobSearchForm):not(#reportProblemJobPosting):not(#favouriteaction):not(#markappliedaction):not(#externallinkactivity):not([action*='/jobsearch/jobsearch']):not([action*='/jobsearch/search']):not(.dept-nav):not([name='cse-search-box'])") : null;
           if (applyForm || window.location.href.includes("/apply") || window.location.href.includes("applyresumesharing")) {
             navigated = true;
             logMessage("Successfully navigated to Job Bank direct application form.");
@@ -330,7 +343,17 @@ window.Connectors.JobBank = {
       let previousHtml = "";
 
       while (checkRunning()) {
-        const form = document.querySelector("#applyresumesharing, form:not(#jobsearchform):not(#jobSearchResultsJobSearchForm):not(#reportProblemJobPosting):not(#favouriteaction):not(#markappliedaction):not(#externallinkactivity):not([action*='/jobsearch/jobsearch']):not([action*='/jobsearch/search']):not(.dept-nav):not([name='cse-search-box'])");
+        // Check if submission succeeded
+        const success = Array.from(document.querySelectorAll("h1, h2, h3, h4, p, span")).some(el => {
+          const txt = el.innerText.toLowerCase();
+          return txt.includes("thank you") || txt.includes("submitted") || txt.includes("application complete") || txt.includes("success") || txt.includes("confirmation");
+        }) || window.location.href.includes("confirmation");
+        if (success) {
+          logMessage("Application submission confirmed!");
+          return true;
+        }
+
+        const form = document.querySelector("#applyresumesharing, #docUploadSPForm, form[id*='docUpload'], form:not(#jobsearchform):not(#jobSearchResultsJobSearchForm):not(#reportProblemJobPosting):not(#favouriteaction):not(#markappliedaction):not(#externallinkactivity):not([action*='/jobsearch/jobsearch']):not([action*='/jobsearch/search']):not(.dept-nav):not([name='cse-search-box'])");
         if (!form) {
           logMessage("Form element not detected on the page. Waiting for modal/page...");
           await sleep(1500);
@@ -539,15 +562,7 @@ window.Connectors.JobBank = {
           return false;
         }
 
-        // Check if submission succeeded
-        const success = Array.from(document.querySelectorAll("h1, h2, h3, h4, p, span")).some(el => {
-          const txt = el.innerText.toLowerCase();
-          return txt.includes("thank you") || txt.includes("submitted") || txt.includes("application complete") || txt.includes("success");
-        });
-        if (success) {
-          logMessage("Application submission confirmed!");
-          return true;
-        }
+
       }
       return false;
     }

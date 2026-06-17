@@ -2240,7 +2240,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     if (!jobId) {
       // Fallback: extract from active state URL if we are on a direct apply form flow page
       const currentUrl = window.location.href;
-      if (currentUrl.includes("directapply.xhtml") || currentUrl.includes("applyresumesharing")) {
+      if (currentUrl.includes("directapply.xhtml") || currentUrl.includes("applyresumesharing") || currentUrl.includes("directapply-resume-coverletter") || currentUrl.includes("directapply")) {
         const activeUrl = state.job_urls[state.current_index];
         if (activeUrl) {
           const match = activeUrl.match(/\/(jobposting|directapply)\/(\d+)/) || activeUrl.match(/\/(jobposting|directapply)\/([a-zA-Z0-9]+)/);
