@@ -36,6 +36,14 @@ git fetch origin
 git reset --hard origin/main
 
 # -------------------------------------------------------
+# Configure browser-extension default URLs
+# -------------------------------------------------------
+echo ""
+echo "Configuring browser-extension default URLs from environment..."
+node scripts/config-extension.js .env.production
+
+
+# -------------------------------------------------------
 # 2. Frontend — install dependencies & build
 # -------------------------------------------------------
 echo ""
