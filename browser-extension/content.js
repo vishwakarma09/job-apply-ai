@@ -304,6 +304,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
   // Poll for job changes since LinkedIn is a SPA
   const initScraper = async () => {
     await runAutoLogin();
+    setInterval(runAutoLogin, 2000);
 
     // Check for auto-start apply flag
     const currentPlatform = getPlatformNameFromHostname(window.location.hostname);
@@ -2188,8 +2189,28 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
 
 
     logMessage("Automating form fill...");
+    let currentProfile = JSON.parse(state.profile_json);
+    try {
+      const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+      const token = storage.token;
+      const api = storage.apiUrl || "http://localhost:8000";
+      if (token) {
+        const latestProfile = await fetchBackend(`${api}/api/profiles/active`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (latestProfile) {
+          logMessage("Refreshed active profile from database.");
+          currentProfile = latestProfile;
+          state.profile_json = JSON.stringify(latestProfile);
+          await new Promise(r => chrome.storage.local.set({ randstad_turbo_state: state }, r));
+        }
+      }
+    } catch (e) {
+      console.warn("[AI Job Apply] Failed to refresh profile on resume:", e);
+    }
+
     const fillSuccess = await ActiveConnector.EasyApply.automate(
-      JSON.parse(state.profile_json),
+      currentProfile,
       logMessage,
       () => turboRunning && isContextValid()
     );
@@ -4252,6 +4273,12 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
 
   // Helper to check if we are already logged in
   const isAlreadyLoggedIn = (platform) => {
+    // Check if the current page URL contains login or sign-in paths
+    const url = window.location.href.toLowerCase();
+    if (url.includes("/login") || url.includes("/signin") || url.includes("/sign-in") || url.includes("oauth") || url.includes("/auth")) {
+      return false;
+    }
+
     // If there's a password field on the page, we are not logged in
     const hasPasswordInput = !!document.querySelector('input[type="password"]');
     if (hasPasswordInput) return false;
@@ -4271,207 +4298,300 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     return !hasLoginButton;
   };
 
+  let isRunningAutoLogin = false;
   // Automated Login Agent supporting all platforms and security challenges
   const runAutoLogin = async () => {
-    const platform = getPlatformNameFromHostname(window.location.hostname);
-    if (!platform) return;
+    if (isRunningAutoLogin) return;
+    isRunningAutoLogin = true;
+    try {
+      const platform = getPlatformNameFromHostname(window.location.hostname);
+      if (!platform) return;
 
-    if (isAlreadyLoggedIn(platform)) {
-      console.log(`[AI Job Apply] Already logged in to ${platform}.`);
-      return;
-    }
-
-    // Attempt loop prevention in session storage
-    const attemptKey = `login_attempt_${platform}`;
-    const secAttemptKey = `security_attempt_${platform}`;
-
-    // 1. Check for Security Questions Page (Job Bank, etc.)
-    const securityInput = document.querySelector('input[id*="security"], input[name*="answer"], input[id*="answer"], input[name="securityAnswer"], input#securityAnswer');
-    if (securityInput) {
-      if (sessionStorage.getItem(secAttemptKey)) {
-        console.log(`[AI Job Apply] Security question already attempted for ${platform} in this session. Skipping to avoid infinite loops.`);
-        return;
-      }
-
-      console.log(`[AI Job Apply] Security question page detected for ${platform}.`);
-      
-      // Attempt to extract the question text from the page
-      let questionText = "";
-      const label = document.querySelector('label[for*="Answer"], label[for*="security"], label[for*="question"]');
-      if (label && label.innerText) {
-        questionText = label.innerText;
-      } else {
-        // Fallback: search visible headers and paragraphs for "?"
-        const candidates = Array.from(document.querySelectorAll('label, p, h2, h3, legend, div.form-group, span'));
-        for (const cand of candidates) {
-          const text = cand.innerText ? cand.innerText.trim() : "";
-          if (text.includes("?") && text.length < 200) {
-            questionText = text;
-            break;
-          }
+      if (platform === "Job Bank") {
+        const url = window.location.href.toLowerCase();
+        if (!isAlreadyLoggedIn(platform) && !url.includes("/login") && !url.includes("security") && !url.includes("applyresumesharing")) {
+          console.log("[AI Job Apply] Job Bank: Direct redirecting to login page...");
+          window.location.href = "https://www.jobbank.gc.ca/login";
+          return;
         }
       }
 
-      if (questionText) {
-        console.log(`[AI Job Apply] Found security question: "${questionText}"`);
+      if (isAlreadyLoggedIn(platform)) {
+        return;
+      }
+
+      // Attempt loop prevention in session storage
+      const attemptKey = `login_attempt_${platform}`;
+      const secAttemptKey = `security_attempt_${platform}`;
+
+      // 1. Check for Security Questions Page (Job Bank, etc.)
+      const securityInput = document.querySelector('input[id*="security"], input[name*="answer"], input[id*="answer"], input[name="securityAnswer"], input#securityAnswer');
+      if (securityInput) {
+        if (sessionStorage.getItem(secAttemptKey)) {
+          console.log(`[AI Job Apply] Security question already attempted for ${platform} in this session. Skipping to avoid infinite loops.`);
+          return;
+        }
+
+        console.log(`[AI Job Apply] Security question page detected for ${platform}.`);
         
-        // Fetch connector details from the backend to get security questions list
+        // Attempt to extract the question text from the page
+        let questionText = "";
+        const label = document.querySelector('label[for*="Answer"], label[for*="security"], label[for*="question"]');
+        if (label && label.innerText) {
+          questionText = label.innerText;
+        } else {
+          // Fallback: search visible headers and paragraphs for "?"
+          const candidates = Array.from(document.querySelectorAll('label, p, h2, h3, legend, div.form-group, span'));
+          for (const cand of candidates) {
+            const text = cand.innerText ? cand.innerText.trim() : "";
+            if (text.includes("?") && text.length < 200) {
+              questionText = text;
+              break;
+            }
+          }
+        }
+
+        if (questionText) {
+          console.log(`[AI Job Apply] Found security question: "${questionText}"`);
+          
+          // Fetch connector details from the backend to get security questions list
+          const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+          const token = storage.token;
+          const api = storage.apiUrl || "http://localhost:8000";
+          if (!token) return;
+
+          try {
+            const matchResult = await fetchBackend(`${api}/api/connectors/match-security-question`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                platform_name: platform,
+                question_text: questionText
+              })
+            });
+
+            const SIMILARITY_THRESHOLD = 0.60;
+            if (matchResult && matchResult.matched && matchResult.similarity >= SIMILARITY_THRESHOLD && matchResult.answer) {
+              console.log(`[AI Job Apply] Matched security question semantically via pgvector (Similarity: ${matchResult.similarity.toFixed(4)}): "${matchResult.question}". Filling answer...`);
+              securityInput.value = matchResult.answer;
+              securityInput.dispatchEvent(new Event("input", { bubbles: true }));
+              securityInput.dispatchEvent(new Event("change", { bubbles: true }));
+                
+                sessionStorage.setItem(secAttemptKey, 'true');
+                await new Promise(r => setTimeout(r, 1000));
+                
+                const submitBtn = document.querySelector('button[type="submit"], input[type="submit"], button[id*="submit"], input[id*="submit"]');
+                if (submitBtn) {
+                  console.log(`[AI Job Apply] Submitting security answer...`);
+                  window.clickElement(submitBtn);
+                  await new Promise(r => setTimeout(r, 4000));
+                }
+                return;
+              } else {
+                console.warn(`[AI Job Apply] No matching answer found for question: "${questionText}"`);
+              }
+          } catch (e) {
+            console.warn("[AI Job Apply] Error retrieving security questions:", e);
+          }
+        }
+        return;
+      }
+
+      const emailInput = document.querySelector('input[type="email"], input[name="email"], input[id*="email"], input[name*="email"], input[name="session_key"], input#username, input#ifr-email, input[name*="username"]');
+      const passwordInput = document.querySelector('input[type="password"], input[name="password"], input#password, input#ifr-password, input[name*="password"]');
+
+      // 2. Check for Multi-step Email/Username step (No Password field visible yet)
+      if (emailInput && !passwordInput) {
+        if (sessionStorage.getItem(attemptKey)) {
+          console.log(`[AI Job Apply] Login credentials already attempted for ${platform} in this session. Skipping.`);
+          return;
+        }
+
         const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
         const token = storage.token;
         const api = storage.apiUrl || "http://localhost:8000";
         if (!token) return;
 
         try {
-          const matchResult = await fetchBackend(`${api}/api/connectors/match-security-question`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              platform_name: platform,
-              question_text: questionText
-            })
+          console.log(`[AI Job Apply] Fetching ${platform} credentials from backend for step 1...`);
+          const connectors = await fetchBackend(`${api}/api/connectors`, {
+            headers: { "Authorization": `Bearer ${token}` }
           });
+          
+          const connector = connectors.find(c => c.platform_name === platform && c.status === "Connected");
+          if (!connector || !connector.credentials_json) {
+            console.log(`[AI Job Apply] ${platform} connector is not configured/connected.`);
+            return;
+          }
+          
+          const credentials = JSON.parse(connector.credentials_json);
+          if (!credentials || credentials.auth_method !== "credentials") {
+            console.log(`[AI Job Apply] ${platform} connector is not configured to use Username & Password auth method.`);
+            return;
+          }
 
-          const SIMILARITY_THRESHOLD = 0.60;
-          if (matchResult && matchResult.matched && matchResult.similarity >= SIMILARITY_THRESHOLD && matchResult.answer) {
-            console.log(`[AI Job Apply] Matched security question semantically via pgvector (Similarity: ${matchResult.similarity.toFixed(4)}): "${matchResult.question}". Filling answer...`);
-            securityInput.value = matchResult.answer;
-            securityInput.dispatchEvent(new Event("input", { bubbles: true }));
-            securityInput.dispatchEvent(new Event("change", { bubbles: true }));
-              
-              sessionStorage.setItem(secAttemptKey, 'true');
-              await new Promise(r => setTimeout(r, 1000));
-              
-              const submitBtn = document.querySelector('button[type="submit"], input[type="submit"], button[id*="submit"], input[id*="submit"]');
-              if (submitBtn) {
-                console.log(`[AI Job Apply] Submitting security answer...`);
-                window.clickElement(submitBtn);
-                await new Promise(r => setTimeout(r, 4000));
-              }
-              return;
-            } else {
-              console.warn(`[AI Job Apply] No matching answer found for question: "${questionText}"`);
-            }
-        } catch (e) {
-          console.warn("[AI Job Apply] Error retrieving security questions:", e);
+          if (!credentials.username) {
+            console.log(`[AI Job Apply] ${platform} credentials username missing.`);
+            return;
+          }
+
+          console.log(`[AI Job Apply] Filling username/email for step 1 of ${platform}...`);
+          emailInput.value = credentials.username;
+          emailInput.dispatchEvent(new Event("input", { bubbles: true }));
+          emailInput.dispatchEvent(new Event("change", { bubbles: true }));
+          
+          await new Promise(r => setTimeout(r, 500));
+          
+          const nextSelectors = [
+            '#loginForm\\:loginProcess',
+            'button[id*="next"]',
+            'input[id*="next"]',
+            'button[id*="loginProcess"]'
+          ];
+          
+          let nextBtn = null;
+          for (const sel of nextSelectors) {
+            nextBtn = document.querySelector(sel);
+            if (nextBtn && window.isElementVisible(nextBtn)) break;
+          }
+
+          if (!nextBtn) {
+            nextBtn = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"]')).find(el => {
+              const text = el.innerText ? el.innerText.trim().toLowerCase() : (el.value ? el.value.trim().toLowerCase() : '');
+              return text === 'next' || text === 'continue' || text === 'next step';
+            });
+          }
+                            
+          if (nextBtn) {
+            console.log(`[AI Job Apply] Clicking Next/Continue for ${platform}...`);
+            window.clickElement(nextBtn);
+            await new Promise(r => setTimeout(r, 4000));
+          }
+        } catch (err) {
+          console.warn(`[AI Job Apply] ${platform} auto-login step 1 failed:`, err);
         }
-      }
-      return;
-    }
-
-    // 2. Check for Username & Password Login Page
-    const emailInput = document.querySelector('input[type="email"], input[name="email"], input[id*="email"], input[name="session_key"], input#username, input#ifr-email, input[name*="username"]');
-    const passwordInput = document.querySelector('input[type="password"], input[name="password"], input#password, input#ifr-password, input[name*="password"]');
-
-    if (emailInput && passwordInput) {
-      if (sessionStorage.getItem(attemptKey)) {
-        console.log(`[AI Job Apply] Login credentials already attempted for ${platform} in this session. Skipping.`);
         return;
       }
 
-      const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
-      const token = storage.token;
-      const api = storage.apiUrl || "http://localhost:8000";
-      if (!token) return;
-
-      try {
-        console.log(`[AI Job Apply] Fetching ${platform} credentials from backend...`);
-        const connectors = await fetchBackend(`${api}/api/connectors`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        
-        const connector = connectors.find(c => c.platform_name === platform && c.status === "Connected");
-        if (!connector || !connector.credentials_json) {
-          console.log(`[AI Job Apply] ${platform} connector is not configured/connected.`);
-          return;
-        }
-        
-        const credentials = JSON.parse(connector.credentials_json);
-        if (!credentials || credentials.auth_method !== "credentials") {
-          console.log(`[AI Job Apply] ${platform} connector is not configured to use Username & Password auth method.`);
+      // 3. Check for Password Page (or Combined Login Page)
+      if (passwordInput) {
+        if (sessionStorage.getItem(attemptKey)) {
+          console.log(`[AI Job Apply] Login credentials already attempted for ${platform} in this session. Skipping.`);
           return;
         }
 
-        if (!credentials.username || !credentials.password) {
-          console.log(`[AI Job Apply] ${platform} credentials username/password missing.`);
-          return;
-        }
+        const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+        const token = storage.token;
+        const api = storage.apiUrl || "http://localhost:8000";
+        if (!token) return;
 
-        console.log(`[AI Job Apply] Filling credentials for ${platform}...`);
-        emailInput.value = credentials.username;
-        emailInput.dispatchEvent(new Event("input", { bubbles: true }));
-        emailInput.dispatchEvent(new Event("change", { bubbles: true }));
-        
-        await new Promise(r => setTimeout(r, 500));
-        
-        passwordInput.value = credentials.password;
-        passwordInput.dispatchEvent(new Event("input", { bubbles: true }));
-        passwordInput.dispatchEvent(new Event("change", { bubbles: true }));
-        
-        await new Promise(r => setTimeout(r, 500));
-        
-        // Find and click submit/login button
-        const submitSelectors = [
-          'button[type="submit"]',
-          'input[type="submit"]',
-          'button.btn__primary--large',
-          'button[id*="login"]',
-          'input[id*="login"]',
-          'button[data-litms-control-id*="login"]'
+        try {
+          console.log(`[AI Job Apply] Fetching ${platform} credentials from backend for step 2...`);
+          const connectors = await fetchBackend(`${api}/api/connectors`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          });
+          
+          const connector = connectors.find(c => c.platform_name === platform && c.status === "Connected");
+          if (!connector || !connector.credentials_json) {
+            console.log(`[AI Job Apply] ${platform} connector is not configured/connected.`);
+            return;
+          }
+          
+          const credentials = JSON.parse(connector.credentials_json);
+          if (!credentials || credentials.auth_method !== "credentials") {
+            console.log(`[AI Job Apply] ${platform} connector is not configured to use Username & Password auth method.`);
+            return;
+          }
+
+          if (!credentials.password) {
+            console.log(`[AI Job Apply] ${platform} credentials password missing.`);
+            return;
+          }
+
+          if (emailInput && !emailInput.value && credentials.username) {
+            console.log(`[AI Job Apply] Filling username/email for ${platform}...`);
+            emailInput.value = credentials.username;
+            emailInput.dispatchEvent(new Event("input", { bubbles: true }));
+            emailInput.dispatchEvent(new Event("change", { bubbles: true }));
+            await new Promise(r => setTimeout(r, 500));
+          }
+
+          console.log(`[AI Job Apply] Filling password for ${platform}...`);
+          passwordInput.value = credentials.password;
+          passwordInput.dispatchEvent(new Event("input", { bubbles: true }));
+          passwordInput.dispatchEvent(new Event("change", { bubbles: true }));
+          
+          await new Promise(r => setTimeout(r, 500));
+          
+          // Find and click submit/login button
+          const submitSelectors = [
+            'button#loginStandardPlusUser',
+            'button.object-signin',
+            'button[id*="login"]',
+            'input[id*="login"]',
+            'button.btn__primary--large',
+            'button[data-litms-control-id*="login"]',
+            'button[type="submit"]',
+            'input[type="submit"]'
+          ];
+          
+          let submitBtn = null;
+          for (const sel of submitSelectors) {
+            submitBtn = document.querySelector(sel);
+            if (submitBtn && window.isElementVisible(submitBtn)) break;
+          }
+
+          if (!submitBtn) {
+            submitBtn = Array.from(document.querySelectorAll('button, a, input[type="submit"]')).find(el => {
+              const text = el.innerText ? el.innerText.trim().toLowerCase() : (el.value ? el.value.trim().toLowerCase() : '');
+              return text === 'log in' || text === 'login' || text === 'sign in';
+            });
+          }
+                            
+          if (submitBtn) {
+            console.log(`[AI Job Apply] Submitting ${platform} login form...`);
+            sessionStorage.setItem(attemptKey, 'true');
+            window.clickElement(submitBtn);
+            await new Promise(r => setTimeout(r, 4000));
+          }
+        } catch (err) {
+          console.warn(`[AI Job Apply] ${platform} auto-login step 2 failed:`, err);
+        }
+        return;
+      } else {
+        // 4. Not on login page, but check if we should navigate to it (if a login link is visible)
+        const loginLinkSelectors = [
+          'a.nav__button-secondary',
+          'a[href*="/login"]',
+          'a[href*="/signin"]',
+          'a[href*="/sign-in"]',
+          'button[data-test="signin-button"]'
         ];
-        
-        let submitBtn = null;
-        for (const sel of submitSelectors) {
-          submitBtn = document.querySelector(sel);
-          if (submitBtn && window.isElementVisible(submitBtn)) break;
+
+        let loginLink = null;
+        for (const sel of loginLinkSelectors) {
+          loginLink = document.querySelector(sel);
+          if (loginLink && window.isElementVisible(loginLink)) break;
         }
 
-        if (!submitBtn) {
-          submitBtn = Array.from(document.querySelectorAll('button, a')).find(el => {
+        if (!loginLink) {
+          loginLink = Array.from(document.querySelectorAll('a, button')).find(el => {
             const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
             return text === 'log in' || text === 'login' || text === 'sign in';
           });
         }
-                          
-        if (submitBtn) {
-          console.log(`[AI Job Apply] Submitting ${platform} login form...`);
-          sessionStorage.setItem(attemptKey, 'true');
-          window.clickElement(submitBtn);
+
+        if (loginLink) {
+          console.log(`[AI Job Apply] Clicking login link/button to navigate to login page...`);
+          window.clickElement(loginLink);
           await new Promise(r => setTimeout(r, 4000));
         }
-      } catch (err) {
-        console.warn(`[AI Job Apply] ${platform} auto-login failed:`, err);
       }
-    } else {
-      // 3. Not on login page, but check if we should navigate to it (if a login link is visible)
-      const loginLinkSelectors = [
-        'a.nav__button-secondary',
-        'a[href*="/login"]',
-        'a[href*="/signin"]',
-        'a[href*="/sign-in"]',
-        'button[data-test="signin-button"]'
-      ];
-
-      let loginLink = null;
-      for (const sel of loginLinkSelectors) {
-        loginLink = document.querySelector(sel);
-        if (loginLink && window.isElementVisible(loginLink)) break;
-      }
-
-      if (!loginLink) {
-        loginLink = Array.from(document.querySelectorAll('a, button')).find(el => {
-          const text = el.innerText ? el.innerText.trim().toLowerCase() : '';
-          return text === 'log in' || text === 'login' || text === 'sign in';
-        });
-      }
-
-      if (loginLink) {
-        console.log(`[AI Job Apply] Clicking login link/button to navigate to login page...`);
-        window.clickElement(loginLink);
-        await new Promise(r => setTimeout(r, 4000));
-      }
+    } finally {
+      isRunningAutoLogin = false;
     }
   };
 

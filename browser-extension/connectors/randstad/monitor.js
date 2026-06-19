@@ -75,7 +75,7 @@ setTimeout(async () => {
             try {
               console.log("[AutoLogin] Localhost dashboard page detected. Attempting auto-login...");
               await newPage.waitForSelector('input[type="email"], input[name="email"]', { timeout: 10000 });
-              await newPage.fill('input[type="email"], input[name="email"]', 'test@aijobapply.com');
+              await newPage.fill('input[type="email"], input[name="email"]', 'kkumar.sandeep89@gmail.com');
               await newPage.fill('input[type="password"], input[name="password"]', 'Password@123');
               await newPage.click('button[type="submit"]');
               console.log("[AutoLogin] Auto-login form submitted successfully!");
@@ -102,8 +102,8 @@ setTimeout(async () => {
       const emailInput = page.locator('input[type="email"], input[name="email"]');
       const isLoginVisible = await emailInput.isVisible({ timeout: 4000 }).catch(() => false);
       if (isLoginVisible) {
-        console.log("[AutoLogin] Form visible. Logging in as test@aijobapply.com...");
-        await emailInput.fill('test@aijobapply.com');
+        console.log("[AutoLogin] Form visible. Logging in as kkumar.sandeep89@gmail.com...");
+        await emailInput.fill('kkumar.sandeep89@gmail.com');
         await page.fill('input[type="password"], input[name="password"]', 'Password@123');
         await page.click('button[type="submit"]');
         await page.waitForTimeout(3000);

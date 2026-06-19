@@ -318,8 +318,30 @@ window.Connectors.JobBank = {
           await sleep(1000);
           waitCount++;
           
-          const isDirectApplyUrl = window.location.href.includes("/directapply") || window.location.href.includes("applyresumesharing");
-          const applyForm = isDirectApplyUrl ? document.querySelector("#applyresumesharing, #docUploadSPForm, form[id*='docUpload'], form:not(#jobsearchform):not(#jobSearchResultsJobSearchForm):not(#reportProblemJobPosting):not(#favouriteaction):not(#markappliedaction):not(#externallinkactivity):not([action*='/jobsearch/jobsearch']):not([action*='/jobsearch/search']):not(.dept-nav):not([name='cse-search-box'])") : null;
+          // Check if we got redirected to login page
+          if (window.location.href.includes("/login")) {
+            logMessage("Redirected to login page. Waiting for auto-login...");
+            let loginWait = 0;
+            while (loginWait < 20 && checkRunning() && window.location.href.includes("/login")) {
+              await sleep(1000);
+              loginWait++;
+            }
+            waitCount = 0;
+            continue;
+          }
+
+          // Check if Sign In overlay/button is present
+          const signInBtn = document.querySelector("#applyresumesharing\\:redirectbutton, input[value='Sign in'], button[id*='redirectbutton']");
+          if (signInBtn && window.isElementVisible(signInBtn)) {
+            logMessage("Sign In overlay detected. Clicking Sign In to authenticate...");
+            window.clickElement(signInBtn);
+            await sleep(2000);
+            waitCount = 0;
+            continue;
+          }
+
+          const isDirectApplyUrl = window.location.href.includes("/directapply") || window.location.href.includes("applyresumesharing") || !!document.querySelector("#applyresumesharing");
+          const applyForm = document.querySelector("#applyresumesharing, #docUploadSPForm, form[id*='docUpload'], form:not(#jobsearchform):not(#jobSearchResultsJobSearchForm):not(#reportProblemJobPosting):not(#favouriteaction):not(#markappliedaction):not(#externallinkactivity):not([action*='/jobsearch/jobsearch']):not([action*='/jobsearch/search']):not(.dept-nav):not([name='cse-search-box'])");
           if (applyForm || window.location.href.includes("/apply") || window.location.href.includes("applyresumesharing")) {
             navigated = true;
             logMessage("Successfully navigated to Job Bank direct application form.");

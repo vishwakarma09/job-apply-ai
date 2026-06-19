@@ -268,6 +268,34 @@ window.Connectors.Randstad = {
       logMessage("Randstad Auto Apply initiated. Starting form auto-fill...");
       
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+      const setNativeValue = (element, value) => {
+        const valueSetter = Object.getOwnPropertyDescriptor(element, 'value')?.set;
+        const prototype = Object.getPrototypeOf(element);
+        const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+        
+        if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
+          prototypeValueSetter.call(element, value);
+        } else if (valueSetter) {
+          valueSetter.call(element, value);
+        } else {
+          element.value = value;
+        }
+      };
+
+      const setNativeChecked = (element, checked) => {
+        const checkedSetter = Object.getOwnPropertyDescriptor(element, 'checked')?.set;
+        const prototype = Object.getPrototypeOf(element);
+        const prototypeCheckedSetter = Object.getOwnPropertyDescriptor(prototype, 'checked')?.set;
+        
+        if (prototypeCheckedSetter && checkedSetter !== prototypeCheckedSetter) {
+          prototypeCheckedSetter.call(element, checked);
+        } else if (checkedSetter) {
+          checkedSetter.call(element, checked);
+        } else {
+          element.checked = checked;
+        }
+      };
       
       // Retrieve backend authentication details from storage
       const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
@@ -310,81 +338,80 @@ window.Connectors.Randstad = {
               if (captchaWidget) {
                 logMessage("[AI Job Apply] FriendlyCaptcha detected unstarted. Scrolling into view...");
                 captchaWidget.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                
-                const startBtn = captchaWidget.querySelector('.frc-button');
-                if (startBtn) {
+                await sleep(1000);
+                const startBtn = captchaWidget.querySelector('button');
+                if (startBtn && startBtn.innerText.toLowerCase().includes('start')) {
                   logMessage("[AI Job Apply] Auto-clicking FriendlyCaptcha start button...");
                   startBtn.click();
                 }
               }
             }
           } catch (e) {
-            console.error("[AI Job Apply] Error auto-triggering FriendlyCaptcha:", e);
+            console.warn("[AI Job Apply] Error handling FriendlyCaptcha automation:", e);
           }
 
           await sleep(3000);
           continue;
         }
 
+        // Prevent infinite loops on static forms
         const currentHtml = form.innerHTML;
         if (currentHtml === previousHtml) {
-          logMessage("Application form stalled. Please answer outstanding fields manually.");
-          const activeJobId = jobId || window.Connectors.Randstad.getJobId();
-          if (activeJobId) {
-            chrome.storage.local.set({ [`retry_outstanding_questions_${activeJobId}`]: true });
+          formIteration++;
+          if (formIteration > 3) {
+            logMessage("Form hasn't updated after multiple attempts. Stopping to prevent loop.");
+            return false;
           }
-          return false;
+        } else {
+          formIteration = 0;
+          previousHtml = currentHtml;
         }
 
-        previousHtml = currentHtml;
-        formIteration++;
-        logMessage(`Filling page ${formIteration}...`);
+        logMessage(`Filling page ${formIteration + 1}...`);
 
         // 1. Resume Upload
-        const resumeInput = form.querySelector("input[type='file'][id*='resume'], input[type='file'][name*='resume']");
+        const resumeInput = form.querySelector("input[type='file'][id*='resume'], input[type='file'][name*='resume']") || form.querySelector("input[type='file']");
         if (resumeInput && profile.resume_id && token) {
           try {
             logMessage("Fetching resume metadata...");
             const resList = await fetchBackend(`${api}/api/profiles/resumes`, {
               headers: { "Authorization": `Bearer ${token}` }
             });
-            const activeResume = resList.find(r => r.id === profile.resume_id);
-            const filename = activeResume ? activeResume.filename : "resume.pdf";
-
-            logMessage(`Downloading resume: ${filename}...`);
-            const downloadResult = await fetchBackend(`${api}/api/profiles/resumes/${profile.resume_id}/download`, {
-              headers: { "Authorization": `Bearer ${token}` }
-            });
-
-            if (downloadResult && downloadResult.base64Data) {
-              const base64Data = downloadResult.base64Data;
-              const binaryString = atob(base64Data);
-              const len = binaryString.length;
-              const bytes = new Uint8Array(len);
-              for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
+            const dbResume = resList.find(r => r.id === profile.resume_id);
+            if (dbResume) {
+              logMessage(`Downloading resume: ${dbResume.filename}...`);
+              const downloadResult = await fetchBackend(`${api}/api/profiles/resumes/${profile.resume_id}/download`, {
+                headers: { "Authorization": `Bearer ${token}` }
+              });
+              if (downloadResult && downloadResult.base64Data) {
+                // Convert base64 to binary array
+                const binaryStr = atob(downloadResult.base64Data);
+                const bytes = new Uint8Array(binaryStr.length);
+                for (let i = 0; i < binaryStr.length; i++) {
+                  bytes[i] = binaryStr.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: "application/pdf" });
+                const file = new File([blob], dbResume.filename, { type: "application/pdf" });
+                
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                resumeInput.files = dataTransfer.files;
+                resumeInput.dispatchEvent(new Event("change", { bubbles: true }));
+                logMessage(`Attached resume file: ${dbResume.filename}`);
+                await sleep(1500);
+              } else {
+                logMessage("No resume download data returned.");
               }
-              
-              let mimeType = "application/pdf";
-              if (filename.endsWith(".docx")) mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-              else if (filename.endsWith(".doc")) mimeType = "application/msword";
-
-              const blob = new Blob([bytes], { type: mimeType });
-              const file = new File([blob], filename, { type: mimeType });
-              const dt = new DataTransfer();
-              dt.items.add(file);
-              resumeInput.files = dt.files;
-              resumeInput.dispatchEvent(new Event("change", { bubbles: true }));
-              resumeInput.dispatchEvent(new Event("input", { bubbles: true }));
-              logMessage(`Attached resume: ${filename}`);
+            } else {
+              logMessage("Resume not found in active profile list.");
             }
           } catch (err) {
             logMessage(`Resume attach failed: ${err.message}`);
           }
         }
 
-        // 2. Fill Text, Phone, Email Inputs
-        const inputs = Array.from(form.querySelectorAll("input[type='text'], input[type='email'], input[type='tel'], input:not([type]), textarea"));
+        // 2. Fill Text, Phone, Email, Password Inputs
+        const inputs = Array.from(form.querySelectorAll("input[type='text'], input[type='email'], input[type='tel'], input[type='password'], input:not([type]), textarea"));
         for (const input of inputs) {
           if (input.tabIndex === -1 || input.offsetParent === null) continue;
           const labelText = getLabelText(input).toLowerCase().trim();
@@ -403,7 +430,11 @@ window.Connectors.Randstad = {
           if (matchedVal !== null && matchedVal !== undefined && String(matchedVal).trim() !== "") {
             valueToFill = String(matchedVal).trim();
           } else if (labelText.includes("phone") || labelText.includes("mobile") || labelText.includes("number")) {
-            valueToFill = profile.phone || "+1 (555) 019-2834";
+            let cleanPhone = (profile.phone || "").replace(/\D/g, "");
+            if (cleanPhone.length === 11 && cleanPhone.startsWith("1")) {
+              cleanPhone = cleanPhone.substring(1);
+            }
+            valueToFill = cleanPhone || "6473950215";
           } else if (labelText.includes("email")) {
             valueToFill = profile.email || "";
           } else if (labelText.includes("first name") || labelText.includes("given name")) {
@@ -416,12 +447,17 @@ window.Connectors.Randstad = {
             valueToFill = profile.title || "";
           } else if (labelText.includes("linkedin")) {
             valueToFill = profile.linkedin || "";
+          } else if (labelText.includes("password") || input.type === "password") {
+            valueToFill = "Password@123";
           }
 
-          if (valueToFill && !input.value) {
-            input.value = valueToFill;
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-            input.dispatchEvent(new Event("change", { bubbles: true }));
+          if (valueToFill !== undefined && valueToFill !== null && valueToFill !== "") {
+            if (input.value !== valueToFill) {
+              logMessage(`Filling field (${labelText} / name: ${input.name || ''}) -> ${valueToFill}`);
+              setNativeValue(input, valueToFill);
+              input.dispatchEvent(new Event("input", { bubbles: true }));
+              input.dispatchEvent(new Event("change", { bubbles: true }));
+            }
           }
         }
 
@@ -443,62 +479,72 @@ window.Connectors.Randstad = {
 
             if (matchedVal !== null && matchedVal !== undefined && String(matchedVal).trim() !== "") {
               targetVal = String(matchedVal).trim();
-            } else if (labelText.includes("sponsorship") || labelText.includes("sponsor")) {
-              targetVal = profile.visa_sponsorship || "";
+            } else if (labelText.includes("country")) {
+              targetVal = "canada";
+            } else if (labelText.includes("province") || labelText.includes("state")) {
+              targetVal = "ontario";
             }
 
-            let selectIndex = 1;
             if (targetVal) {
-              for (let i = 0; i < select.options.length; i++) {
-                const optText = select.options[i].text.toLowerCase();
-                const valText = select.options[i].value.toLowerCase();
-                if (optText.includes(targetVal.toLowerCase()) || valText.includes(targetVal.toLowerCase())) {
-                  selectIndex = i;
-                  break;
-                }
+              const bestOption = Array.from(select.options).find(opt => {
+                const optText = opt.text.toLowerCase();
+                const optVal = opt.value.toLowerCase();
+                return optText.includes(targetVal) || optVal.includes(targetVal) || targetVal.includes(optText);
+              });
+              if (bestOption) {
+                select.value = bestOption.value;
+                select.dispatchEvent(new Event("change", { bubbles: true }));
+                select.dispatchEvent(new Event("input", { bubbles: true }));
+                logMessage(`Selected option for ${labelText}: ${bestOption.text}`);
               }
             }
-            select.selectedIndex = selectIndex;
-            select.dispatchEvent(new Event("change", { bubbles: true }));
           }
         });
 
         // 4. Fill radio buttons
-        const radioGroups = {};
-        form.querySelectorAll("input[type='radio']").forEach(radio => {
-          const name = radio.name;
-          if (!radioGroups[name]) radioGroups[name] = [];
-          radioGroups[name].push(radio);
-        });
-
-        for (const name in radioGroups) {
-          const radios = radioGroups[name];
-          const isAnyChecked = radios.some(r => r.checked);
-          if (!isAnyChecked) {
-            let labelText = "";
-            const container = radios[0].closest("fieldset, [class*='question'], [class*='Container']");
-            if (container) {
-              const headerEl = container.querySelector("legend, span, label, p");
-              if (headerEl) labelText = headerEl.innerText.toLowerCase();
+        const fieldsets = form.querySelectorAll("fieldset, div[role='radiogroup']");
+        for (const container of fieldsets) {
+          const radios = container.querySelectorAll("input[type='radio']");
+          if (radios.length > 0) {
+            const titleEl = container.querySelector("legend, span, label, p");
+            const titleText = titleEl ? titleEl.innerText.toLowerCase() : "";
+            
+            let targetVal = "";
+            let matchedVal = null;
+            for (const [q, a] of Object.entries(learnedAnswers)) {
+              const cleanQ = q.toLowerCase().trim();
+              if (titleText === cleanQ || titleText.includes(cleanQ) || cleanQ.includes(titleText)) {
+                matchedVal = a;
+                break;
+              }
             }
-            if (!labelText) labelText = getLabelText(radios[0]).toLowerCase().trim();
 
-            let targetVal = "yes";
-            if (labelText.includes("sponsorship") || labelText.includes("sponsor")) {
-              targetVal = (profile.visa_sponsorship === "Yes") ? "yes" : "no";
-            } else if (labelText.includes("authorized") || labelText.includes("work in")) {
+            if (matchedVal !== null && matchedVal !== undefined) {
+              targetVal = String(matchedVal).toLowerCase();
+            } else if (titleText.includes("sponsorship") || titleText.includes("sponsor")) {
+              targetVal = "no";
+            } else if (titleText.includes("authorized") || titleText.includes("legally")) {
               targetVal = "yes";
             }
 
-            let checkIndex = 0;
-            radios.forEach((r, idx) => {
-              const label = getLabelText(r).toLowerCase();
-              if (label === targetVal || label.includes(targetVal)) {
-                checkIndex = idx;
+            if (targetVal) {
+              let checkIndex = -1;
+              radios.forEach((r, idx) => {
+                const labelText = getLabelText(r).toLowerCase();
+                if (labelText.includes(targetVal) || targetVal.includes(labelText)) {
+                  checkIndex = idx;
+                }
+              });
+
+              if (checkIndex !== -1 && !radios[checkIndex].checked) {
+                window.clickElement(radios[checkIndex]);
+                if (!radios[checkIndex].checked) {
+                  radios[checkIndex].checked = true;
+                  radios[checkIndex].dispatchEvent(new Event("change", { bubbles: true }));
+                }
+                logMessage(`Checked radio button for ${titleText}: ${getLabelText(radios[checkIndex])}`);
               }
-            });
-            radios[checkIndex].checked = true;
-            radios[checkIndex].dispatchEvent(new Event("change", { bubbles: true }));
+            }
           }
         }
 
@@ -506,8 +552,9 @@ window.Connectors.Randstad = {
         form.querySelectorAll("input[type='checkbox']").forEach(cb => {
           const labelText = getLabelText(cb).toLowerCase();
           if (!cb.checked && (labelText.includes("agree") || labelText.includes("terms") || labelText.includes("accept") || labelText.includes("policy"))) {
-            cb.checked = true;
-            cb.dispatchEvent(new Event("change", { bubbles: true }));
+            setNativeChecked(cb, true);
+            window.clickElement(cb);
+            logMessage(`Checked checkbox: ${labelText}`);
           }
         });
 
@@ -521,7 +568,7 @@ window.Connectors.Randstad = {
 
         if (continueBtn) {
           logMessage("Advancing application form...");
-          continueBtn.click();
+          window.clickElement(continueBtn);
           await sleep(2000);
         } else {
           logMessage("No continue button found. Automation stopped.");
