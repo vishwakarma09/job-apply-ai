@@ -1,0 +1,40 @@
+module.exports = {
+  apps: [
+    {
+      name: "jobapplyai-frontend",
+      cwd: "/var/www/html/jobapplyai.owera.ca/frontend",
+      script: "npm",
+      args: "run preview -- --port 7005 --host 0.0.0.0",
+      interpreter: "none",
+      env: {
+        NODE_ENV: "production",
+      },
+      watch: false,
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 3000,
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+      error_file: "/var/log/pm2/jobapplyai-frontend-error.log",
+      out_file: "/var/log/pm2/jobapplyai-frontend-out.log",
+      merge_logs: true,
+    },
+    {
+      name: "jobapplyai-backend",
+      cwd: "/var/www/html/jobapplyai.owera.ca/backend",
+      script: "/var/www/html/jobapplyai.owera.ca/backend/.venv/bin/uvicorn",
+      args: "app.main:app --host 0.0.0.0 --port 7006 --workers 4",
+      interpreter: "none",
+      env: {
+        PYTHONPATH: "/var/www/html/jobapplyai.owera.ca/backend",
+      },
+      watch: false,
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 3000,
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+      error_file: "/var/log/pm2/jobapplyai-backend-error.log",
+      out_file: "/var/log/pm2/jobapplyai-backend-out.log",
+      merge_logs: true,
+    },
+  ],
+};

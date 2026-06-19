@@ -8,7 +8,7 @@ echo "======================================"
 APP_DIR="/var/www/html/jobapplyai.owera.ca"
 FRONTEND_APP="jobapplyai-frontend"
 BACKEND_APP="jobapplyai-backend"
-ECOSYSTEM_CONFIG="/var/www/html/skillpiv.com/docs/ecosystem.config.cjs"
+ECOSYSTEM_CONFIG="$APP_DIR/docs/ecosystem.config.cjs"
 
 # -------------------------------------------------------
 # Load NVM / Node environment (for non-interactive shells)
