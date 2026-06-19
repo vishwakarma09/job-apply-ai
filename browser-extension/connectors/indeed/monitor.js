@@ -76,6 +76,24 @@ setTimeout(async () => {
       });
     });
 
+    console.log("Navigating to local dashboard to sync extension token...");
+    try {
+      await page.goto('http://localhost:5173/login', { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await page.waitForTimeout(2000);
+      const hostEmailInput = page.locator('input[type="email"]');
+      const hostPasswordInput = page.locator('input[type="password"]');
+      if (await hostEmailInput.isVisible({ timeout: 5000 })) {
+        console.log("Logging in to local dashboard...");
+        await hostEmailInput.fill('kkumar.sandeep89@gmail.com');
+        await hostPasswordInput.fill('password');
+        await page.click('button[type="submit"]');
+        await page.waitForTimeout(4000);
+        console.log("Dashboard login complete, extension token synchronized.");
+      }
+    } catch (e) {
+      console.log("Dashboard navigation/login skipped or failed:", e.message);
+    }
+
     console.log("Navigating to Indeed Sign-In page...");
     await page.goto('https://secure.indeed.com/auth', { waitUntil: 'domcontentloaded' }).catch(e => {
       console.log("Navigation warning:", e.message);
