@@ -23,6 +23,7 @@ class UserResponse(UserBase):
     openai_api_key: Optional[str] = None
     cerebras_api_key: Optional[str] = None
     preferred_ai_provider: Optional[str] = "default"
+    is_active: bool
 
     class Config:
         from_attributes = True

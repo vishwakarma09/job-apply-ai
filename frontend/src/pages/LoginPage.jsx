@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Mail, Lock, Sparkles, AlertTriangle } from "lucide-react";
 
@@ -7,10 +7,32 @@ const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
   
   const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const activated = params.get("activated");
+    const activationError = params.get("activation_error");
+
+    if (activated === "true") {
+      setSuccess("Your account has been successfully activated! Please sign in.");
+      setError("");
+      // Clear URL query parameters
+      navigate(location.pathname, { replace: true });
+    } else if (activationError) {
+      setError(activationError === "invalid_token" 
+        ? "Invalid or expired activation token. Please try again." 
+        : "Activation failed.");
+      setSuccess("");
+      // Clear URL query parameters
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location, navigate]);
 
   const handleGoogleResponse = async (response) => {
     try {
@@ -82,6 +104,12 @@ const LoginPage = () => {
           <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 p-4 rounded-xl text-xs flex items-center gap-2 mb-6">
             <AlertTriangle size={16} />
             <span>{error}</span>
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-xl text-xs flex items-center gap-2 mb-6">
+            <span>{success}</span>
           </div>
         )}
 

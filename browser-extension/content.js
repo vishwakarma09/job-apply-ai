@@ -4375,13 +4375,44 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
 
             const SIMILARITY_THRESHOLD = 0.60;
             if (matchResult && matchResult.matched && matchResult.similarity >= SIMILARITY_THRESHOLD && matchResult.answer) {
-              console.log(`[AI Job Apply] Matched security question semantically via pgvector (Similarity: ${matchResult.similarity.toFixed(4)}): "${matchResult.question}". Filling answer...`);
-              securityInput.value = matchResult.answer;
-              securityInput.dispatchEvent(new Event("input", { bubbles: true }));
-              securityInput.dispatchEvent(new Event("change", { bubbles: true }));
+              // Check for keyword conflicts to prevent wrong matches on syntactically similar security questions
+              const q1Lower = questionText.toLowerCase();
+              const q2Lower = matchResult.question.toLowerCase();
+              const groups = [
+                ['mother', 'father', 'parent', 'mom', 'dad'],
+                ['pet', 'dog', 'cat', 'animal'],
+                ['city', 'town', 'born', 'birth', 'location', 'place'],
+                ['school', 'subject', 'teacher', 'course', 'class'],
+                ['color', 'colour'],
+                ['food', 'dish', 'meal', 'fruit'],
+                ['car', 'vehicle', 'make', 'model'],
+                ['first', 'last', 'middle', 'maiden'],
+                ['spouse', 'partner', 'husband', 'wife']
+              ];
+              let hasConflict = false;
+              for (const group of groups) {
+                const q1Words = group.filter(word => q1Lower.includes(word));
+                const q2Words = group.filter(word => q2Lower.includes(word));
+                if (q1Words.length > 0 || q2Words.length > 0) {
+                  const overlap = q1Words.filter(w => q2Words.includes(w));
+                  if (overlap.length === 0) {
+                    hasConflict = true;
+                    break;
+                  }
+                }
+              }
+
+              if (hasConflict) {
+                console.warn(`[AI Job Apply] Blocked security question match due to subject conflict: "${questionText}" vs "${matchResult.question}"`);
+              } else {
+                console.log(`[AI Job Apply] Matched security question semantically via pgvector (Similarity: ${matchResult.similarity.toFixed(4)}): "${matchResult.question}". Filling answer...`);
+                securityInput.value = matchResult.answer;
+                securityInput.dispatchEvent(new Event("input", { bubbles: true }));
+                securityInput.dispatchEvent(new Event("change", { bubbles: true }));
+                securityInput.dispatchEvent(new Event("blur", { bubbles: true }));
                 
                 sessionStorage.setItem(secAttemptKey, 'true');
-                await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 1500));
                 
                 const submitBtn = document.querySelector('button[type="submit"], input[type="submit"], button[id*="submit"], input[id*="submit"]');
                 if (submitBtn) {
@@ -4390,9 +4421,10 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
                   await new Promise(r => setTimeout(r, 4000));
                 }
                 return;
-              } else {
-                console.warn(`[AI Job Apply] No matching answer found for question: "${questionText}"`);
               }
+            } else {
+              console.warn(`[AI Job Apply] No matching answer found for question: "${questionText}"`);
+            }
           } catch (e) {
             console.warn("[AI Job Apply] Error retrieving security questions:", e);
           }
@@ -4442,8 +4474,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           emailInput.value = credentials.username;
           emailInput.dispatchEvent(new Event("input", { bubbles: true }));
           emailInput.dispatchEvent(new Event("change", { bubbles: true }));
+          emailInput.dispatchEvent(new Event("blur", { bubbles: true }));
           
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 1500));
           
           const nextSelectors = [
             '#loginForm\\:loginProcess',
@@ -4523,8 +4556,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           passwordInput.value = credentials.password;
           passwordInput.dispatchEvent(new Event("input", { bubbles: true }));
           passwordInput.dispatchEvent(new Event("change", { bubbles: true }));
+          passwordInput.dispatchEvent(new Event("blur", { bubbles: true }));
           
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 1500));
           
           // Find and click submit/login button
           const submitSelectors = [

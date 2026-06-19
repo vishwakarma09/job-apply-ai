@@ -15,6 +15,8 @@ class User(Base):
     is_premium = Column(Boolean, default=False)
     premium_until = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    is_active = Column(Boolean, default=False)
+    activation_token = Column(String(255), nullable=True)
     
     # Per-user AI Connectors
     openai_api_key = Column(String(255), nullable=True)

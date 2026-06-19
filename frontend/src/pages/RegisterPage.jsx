@@ -23,7 +23,7 @@ const RegisterPage = () => {
       setSuccess(true);
       setTimeout(() => {
         navigate("/login");
-      }, 2000);
+      }, 6000);
     } catch (err) {
       setError(err.response?.data?.detail || "Registration failed. Try again.");
     } finally {
@@ -51,7 +51,7 @@ const RegisterPage = () => {
 
         {success && (
           <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-4 rounded-xl text-xs flex items-center gap-2 mb-6">
-            <span>Registration successful! Redirecting to login...</span>
+            <span>Registration successful! An activation link has been sent to your email. Redirecting to login...</span>
           </div>
         )}
 

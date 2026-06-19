@@ -7,6 +7,11 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     SMTP_HOST: str = "localhost"
     SMTP_PORT: int = 1025
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_TLS: bool = False
+    EMAILS_FROM_EMAIL: str = "noreply@jobapply.ai"
+    FRONTEND_URL: str = "http://localhost:5173"
     JWT_SECRET: str = "super_secret_ai_job_apply_key_998877"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 600
     
