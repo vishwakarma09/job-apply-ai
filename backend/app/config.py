@@ -1,3 +1,5 @@
+import os
+import sys
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -26,7 +28,7 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = ""
 
     class Config:
-        env_file = ".env"
+        env_file = ".env.production" if (os.path.exists(".env.production") and "pytest" not in sys.modules) else ".env"
         extra = "ignore"
 
 settings = Settings()

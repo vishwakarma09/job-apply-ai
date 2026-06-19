@@ -161,11 +161,9 @@ def register(user_in: schemas.UserCreate, request: Request, db: Session = Depend
     return user
 
 @router.get("/activate")
-def activate_account(token: str, db: Session = Depends(get_db)):
+def activate_account(token: str, request: Request, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.activation_token == token).first()
-    
-    frontend_url = settings.FRONTEND_URL or "http://localhost:5173"
-    
+    frontend_url = settings.FRONTEND_URL
     if not user:
         logger.warning(f"Invalid activation token requested: {token}")
         return RedirectResponse(url=f"{frontend_url}/login?activation_error=invalid_token")
@@ -176,6 +174,7 @@ def activate_account(token: str, db: Session = Depends(get_db)):
     
     logger.info(f"User account activated: {user.email}")
     return RedirectResponse(url=f"{frontend_url}/login?activated=true")
+
 
 @router.post("/login", response_model=schemas.Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
