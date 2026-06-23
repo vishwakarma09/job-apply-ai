@@ -18,6 +18,7 @@ try:
     db.query(models.Conversation).delete()
     db.query(models.CoverLetter).delete()
     db.query(models.AppliedJob).delete()
+    db.query(models.ConnectorSecurityQuestion).delete()
     db.query(models.Connector).delete()
     db.query(models.JobProfile).delete()
     db.query(models.Resume).delete()
@@ -26,6 +27,8 @@ try:
     db.query(models.Plan).delete()
     db.query(models.Discount).delete()
     db.query(models.UserKnowledgebase).delete()
+    db.query(models.EmailCredential).delete()
+    db.query(models.SupportTicket).delete()
     db.query(models.User).delete()
     db.commit()
 

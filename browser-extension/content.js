@@ -4400,6 +4400,12 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       const attemptKey = `login_attempt_${platform}`;
       const secAttemptKey = `security_attempt_${platform}`;
 
+      // Set attempt flag if we are on an OTP verification screen
+      const otpInput = document.querySelector('input[name="otp-input"], input[id*="code"], input[name*="code"], input[id*="otp"], input[name*="otp"], input[type="tel"]');
+      if (otpInput) {
+        sessionStorage.setItem(attemptKey, 'true');
+      }
+
       // 1. Check for Security Questions Page (Job Bank, etc.)
       const securityInput = document.querySelector('input[id*="security"], input[name*="answer"], input[id*="answer"], input[name="securityAnswer"], input#securityAnswer');
       if (securityInput) {
@@ -4576,6 +4582,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
                             
           if (nextBtn) {
             console.log(`[AI Job Apply] Clicking Next/Continue for ${platform}...`);
+            if (["Indeed", "ZipRecruiter", "Glassdoor", "Greenhouse", "Randstad"].includes(platform)) {
+              sessionStorage.setItem(attemptKey, 'true');
+            }
             window.clickElement(nextBtn);
             await new Promise(r => setTimeout(r, 4000));
           }
@@ -4673,6 +4682,15 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         return;
       } else {
         // 4. Not on login page, but check if we should navigate to it (if a login link is visible)
+        const url = window.location.href.toLowerCase();
+        if (url.includes("/login") || url.includes("/signin") || url.includes("/sign-in") || url.includes("oauth") || url.includes("/auth")) {
+          return;
+        }
+
+        if (sessionStorage.getItem(attemptKey)) {
+          return;
+        }
+
         const loginLinkSelectors = [
           'a.nav__button-secondary',
           'a[href*="/login"]',
@@ -4695,6 +4713,26 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         }
 
         if (loginLink) {
+          // Check if connector is connected before redirecting
+          const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));
+          const token = storage.token;
+          const api = storage.apiUrl || "http://localhost:8000";
+          if (token) {
+            try {
+              const connectors = await fetchBackend(`${api}/api/connectors`, {
+                headers: { "Authorization": `Bearer ${token}` }
+              });
+              const connector = connectors.find(c => c.platform_name === platform && c.status === "Connected");
+              if (!connector || !connector.credentials_json) {
+                console.log(`[AI Job Apply] ${platform} connector is not connected. Skipping redirect.`);
+                return;
+              }
+            } catch (err) {
+              console.warn("[AI Job Apply] Failed to check connector status before redirect:", err);
+              return;
+            }
+          }
+
           console.log(`[AI Job Apply] Clicking login link/button to navigate to login page...`);
           window.clickElement(loginLink);
           await new Promise(r => setTimeout(r, 4000));

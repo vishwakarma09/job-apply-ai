@@ -300,20 +300,47 @@ def solve_screen_endpoint(
                 
             is_required = f.get("required") is True or str(f.get("required")).lower() == "true"
             if not has_match and is_required and not is_generic_ui_question(label_clean):
+                # Try to deduce answer first
+                from .profiles import deduce_basic_profile_answer
+                deduced = deduce_basic_profile_answer(label_clean, current_user, db)
+                
                 # Check if this exact question exists
                 existing_entry = db.query(models.UserKnowledgebase).filter(
                     models.UserKnowledgebase.user_id == current_user.id,
                     models.UserKnowledgebase.question == label_clean
                 ).first()
-                if not existing_entry:
-                    new_kb = models.UserKnowledgebase(
-                        user_id=current_user.id,
-                        question=label_clean,
-                        answer="", # unanswered
-                        question_embedding=embedding
-                    )
-                    db.add(new_kb)
-                    db.commit()
+                
+                if deduced:
+                    has_match = True
+                    rag_context.append({
+                        "question": label_clean,
+                        "answer": deduced,
+                        "similarity": 1.0
+                    })
+                    
+                    if existing_entry:
+                        if existing_entry.answer == "":
+                            existing_entry.answer = deduced
+                            db.commit()
+                    else:
+                        new_kb = models.UserKnowledgebase(
+                            user_id=current_user.id,
+                            question=label_clean,
+                            answer=deduced,
+                            question_embedding=embedding
+                        )
+                        db.add(new_kb)
+                        db.commit()
+                else:
+                    if not existing_entry:
+                        new_kb = models.UserKnowledgebase(
+                            user_id=current_user.id,
+                            question=label_clean,
+                            answer="", # unanswered
+                            question_embedding=embedding
+                        )
+                        db.add(new_kb)
+                        db.commit()
                     
         # 2. Call AI Solver passing the RAG context
         from ..services import cerebras_service
