@@ -97,7 +97,73 @@ window.clickElement = (element) => {
 };
 
 
-window.sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+window.sleep = (ms) => {
+  let finalMs = ms;
+  // If it's a longer sleep (likely a step delay or cooldown, not a fast poll)
+  if (ms > 1000) {
+    // Add random variance of -20% to +50%, plus a random extra delay between 500ms and 2500ms
+    const variance = (Math.random() * 0.7 - 0.2) * ms; // -20% to +50%
+    const extraHumanDelay = Math.random() * 2000 + 500; // 500ms to 2500ms
+    finalMs = Math.round(ms + variance + extraHumanDelay);
+    console.log(`[Human Sleep] Original: ${ms}ms -> Humanized: ${finalMs}ms`);
+  }
+  return new Promise(resolve => setTimeout(resolve, finalMs));
+};
+
+window.acquireConnectorLock = function(connectorName, jobId) {
+  return new Promise((resolve) => {
+    if (!window.isContextValid()) return resolve(false);
+    const lockKey = `lock_${connectorName.toLowerCase()}`;
+    const now = Date.now();
+    
+    chrome.storage.local.get([lockKey], (result) => {
+      if (!window.isContextValid()) return resolve(false);
+      const lock = result[lockKey];
+      
+      // If the lock is held by a different job and hasn't expired (120 seconds lease)
+      if (lock && lock.jobId !== jobId && (now - lock.timestamp < 120000)) {
+        resolve(false);
+      } else {
+        // Set lock with a unique random token to avoid race conditions
+        const token = Math.random().toString(36).substring(2);
+        const lockObj = { jobId, timestamp: now, token };
+        chrome.storage.local.set({ [lockKey]: lockObj }, () => {
+          if (!window.isContextValid()) return resolve(false);
+          // Wait 50ms to verify ownership of the lock
+          setTimeout(() => {
+            if (!window.isContextValid()) return resolve(false);
+            chrome.storage.local.get([lockKey], (verifyResult) => {
+              if (!window.isContextValid()) return resolve(false);
+              const verifiedLock = verifyResult[lockKey];
+              if (verifiedLock && verifiedLock.token === token) {
+                resolve(true);
+              } else {
+                resolve(false);
+              }
+            });
+          }, 50);
+        });
+      }
+    });
+  });
+};
+
+window.releaseConnectorLock = function(connectorName, jobId) {
+  return new Promise((resolve) => {
+    if (!window.isContextValid()) return resolve(false);
+    const lockKey = `lock_${connectorName.toLowerCase()}`;
+    chrome.storage.local.get([lockKey], (result) => {
+      if (!window.isContextValid()) return resolve(false);
+      const lock = result[lockKey];
+      if (lock && lock.jobId === jobId) {
+        chrome.storage.local.remove([lockKey], () => resolve(true));
+      } else {
+        resolve(false);
+      }
+    });
+  });
+};
+
 
 // Helper function to extract text label associated with an input
 window.getLabelText = (inputEl) => {

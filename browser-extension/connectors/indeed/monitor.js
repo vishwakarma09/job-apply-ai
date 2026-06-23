@@ -46,10 +46,24 @@ process.on('SIGINT', () => {
 
 // Wait for Chrome to initialize, then connect Playwright
 setTimeout(async () => {
+  let browser;
+  const maxAttempts = 10;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`Connecting Playwright to Chrome via CDP (attempt ${attempt}/${maxAttempts})...`);
+      browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+      break;
+    } catch (err) {
+      if (attempt === maxAttempts) {
+        console.error("Failed to run monitor:", err);
+        chromeProcess.kill();
+        process.exit(1);
+      }
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+
   try {
-    console.log("Connecting Playwright to Chrome via CDP...");
-    const browser = await chromium.connectOverCDP('http://localhost:9222');
-    
     // Get default context and page
     const context = browser.contexts()[0];
     let page = context.pages()[0];
@@ -404,16 +418,16 @@ async function autoLaunchTurboMode(page, context) {
   // If we are on Indeed home/landing page (not search results page) or if we are on a search page without a radius limit, navigate directly or perform search
   const isSearchPage = currentUrl.includes("/jobs") || currentUrl.includes("/viewjob") || currentUrl.includes("/rc/clk");
   if (!isSearchPage || (currentUrl.includes("/jobs") && !currentUrl.includes("radius="))) {
-    console.log("[AutoLaunch] Not on search results page or missing radius parameter. Navigating directly to Software Developer jobs in Toronto with radius=0...");
+    console.log("[AutoLaunch] Not on search results page or missing radius parameter. Navigating directly to Forward deployed engineer jobs in Toronto with radius=0...");
     try {
-      await page.goto("https://www.indeed.com/jobs?q=Software+Developer&l=Toronto%2C+ON&radius=0", { waitUntil: 'domcontentloaded', timeout: 25000 });
+      await page.goto("https://www.indeed.com/jobs?q=Forward+deployed+engineer&l=Toronto%2C+ON&radius=0", { waitUntil: 'domcontentloaded', timeout: 25000 });
       await page.waitForTimeout(4000);
     } catch (e) {
       console.log("[AutoLaunch] Direct navigation failed, trying home page form fallback:", e.message);
       try {
         const qInput = page.locator('input[name="q"]');
         await qInput.waitFor({ timeout: 5000 });
-        await qInput.fill("Software Developer");
+        await qInput.fill("Forward deployed engineer");
         
         const lInput = page.locator('input[name="l"]');
         if (await lInput.count() > 0) {

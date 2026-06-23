@@ -72,13 +72,15 @@ try:
         name="Admin User",
         email="admin@aijobapply.com",
         hashed_password=get_password_hash("Password@123"),
-        role="admin"
+        role="admin",
+        is_active=True
     )
     test_user = models.User(
         name="Sandeep Kumar",
         email="kkumar.sandeep89@gmail.com",
         hashed_password=get_password_hash("password"),
-        role="user"
+        role="user",
+        is_active=True
     )
     db.add(admin_user)
     db.add(test_user)

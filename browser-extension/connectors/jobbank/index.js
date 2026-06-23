@@ -289,7 +289,7 @@ window.Connectors.JobBank = {
     async automate(profile, logMessage, checkRunning, jobId = null) {
       logMessage("Job Bank Auto Apply initiated. Starting form auto-fill...");
       
-      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const sleep = window.sleep;
       
       // Retrieve backend authentication details from storage
       const storage = await new Promise(r => chrome.storage.local.get(["token", "apiUrl"], r));

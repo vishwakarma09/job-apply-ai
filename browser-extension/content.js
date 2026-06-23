@@ -12,7 +12,14 @@ if (window.location.hostname.includes("indeed.com") || window.location.hostname.
     console.log("[AI Job Apply Content Script] Received request to clear all turbo states.");
     try {
       chrome.storage.local.set({ turbo_mode_active: false });
-      chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state", "jobbank_search_state", "careerbeacon_turbo_state", "careerbeacon_search_state", "indeed_turbo_state", "vanhack_turbo_state", "vanhack_search_state"]);
+      chrome.storage.local.remove([
+        "greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", 
+        "jobbank_turbo_state", "jobbank_search_state", "careerbeacon_turbo_state", 
+        "careerbeacon_search_state", "indeed_turbo_state", "vanhack_turbo_state", 
+        "vanhack_search_state", "lock_greenhouse", "lock_ziprecruiter", "lock_randstad", 
+        "lock_jobbank", "lock_careerbeacon", "lock_indeed", "lock_vanhack", 
+        "lock_linkedin", "lock_glassdoor"
+      ]);
     } catch (e) {
       console.error("[AI Job Apply] Failed to clear turbo states:", e);
     }
@@ -196,6 +203,75 @@ if (window.location.hostname === "localhost" || window.location.hostname === "12
 // - common/helper.js
 // - connectors/linkedin/index.js
 // - connectors/indeed/index.js
+
+// Wrap all platform connectors' EasyApply.automate methods to enforce
+// serialization (only one active job application at a time per connector).
+if (window.Connectors) {
+  for (const [name, connector] of Object.entries(window.Connectors)) {
+    if (connector.EasyApply && typeof connector.EasyApply.automate === "function") {
+      const originalAutomate = connector.EasyApply.automate;
+      
+      connector.EasyApply.automate = async function(profile, logMessage, checkRunning, jobId = null) {
+        const connectorName = connector.name || name;
+        let activeJobId = jobId;
+        if (!activeJobId) {
+          activeJobId = typeof connector.getJobId === "function" ? connector.getJobId() : null;
+        }
+        if (!activeJobId && window.isContextValid()) {
+          const storageData = await new Promise(r => chrome.storage.local.get(["currently_applying_job_id"], r));
+          activeJobId = storageData ? storageData.currently_applying_job_id : null;
+        }
+        if (!activeJobId) {
+          activeJobId = "unknown_job";
+        }
+        
+        logMessage(`[Concurrency Manager] Requesting execution lock for ${connectorName} (Job: ${activeJobId})...`);
+        
+        let acquired = false;
+        // Wait in a loop for up to 120s if the lock is currently held by a different job
+        for (let attempt = 0; attempt < 60; attempt++) {
+          if (!checkRunning()) {
+            logMessage(`[Concurrency Manager] Stopped/cancelled while waiting for lock.`);
+            return false;
+          }
+          
+          acquired = await window.acquireConnectorLock(connectorName, activeJobId);
+          if (acquired) {
+            logMessage(`[Concurrency Manager] Lock acquired successfully for ${connectorName}.`);
+            break;
+          }
+          
+          if (attempt % 5 === 0) {
+            logMessage(`[Concurrency Manager] Waiting for active application on ${connectorName} to complete...`);
+          }
+          // Sleep a flat 2000ms (we bypass randomized human delay for system locking polls)
+          await new Promise(r => setTimeout(r, 2000));
+        }
+        
+        if (!acquired) {
+          logMessage(`[Concurrency Manager] Timeout waiting for ${connectorName} lock. Skipping.`);
+          return false;
+        }
+        
+        // Start a heartbeat interval to renew our lock every 15 seconds
+        const heartbeatInterval = setInterval(async () => {
+          if (window.isContextValid()) {
+            await window.acquireConnectorLock(connectorName, activeJobId);
+          }
+        }, 15000);
+        
+        try {
+          const result = await originalAutomate.call(this, profile, logMessage, checkRunning, jobId);
+          return result;
+        } finally {
+          clearInterval(heartbeatInterval);
+          logMessage(`[Concurrency Manager] Releasing lock for ${connectorName}.`);
+          await window.releaseConnectorLock(connectorName, activeJobId);
+        }
+      };
+    }
+  }
+}
 
 // ==========================================
 // 3. MAIN WIDGET ENGINE & AUTO-APPLY LOOP

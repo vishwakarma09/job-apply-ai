@@ -298,7 +298,7 @@ window.Connectors.VanHack = {
     async automate(profile, logMessage, checkRunning, jobId = null) {
       logMessage("VanHack Auto Apply initiated. Starting form auto-fill...");
       
-      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const sleep = window.sleep;
       
       function getLabelText(el) {
         // 1. Try to find local question container on VanHack modal

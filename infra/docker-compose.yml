@@ -12,7 +12,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - job_apply_postgres_data:/var/lib/postgresql/data
 
   redis:
     image: redis:7-alpine
@@ -70,4 +70,4 @@ services:
       - backend
 
 volumes:
-  postgres_data:
+  job_apply_postgres_data:

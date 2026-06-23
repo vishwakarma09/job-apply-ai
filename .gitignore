@@ -37,6 +37,7 @@ env/
 
 # Database / Local storage
 postgres_data/
+job_apply_postgres_data/
 backend/uploads/resumes/*
 !backend/uploads/resumes/mock_john_doe_resume.pdf
 

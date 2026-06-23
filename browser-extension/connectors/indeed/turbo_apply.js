@@ -4,7 +4,7 @@ const path = require('path');
 (async () => {
   try {
     console.log("Connecting to real Google Chrome via CDP...");
-    const browser = await chromium.connectOverCDP('http://localhost:9222');
+    const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
     const context = browser.contexts()[0];
     const pages = context.pages();
     

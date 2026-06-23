@@ -267,7 +267,7 @@ window.Connectors.Randstad = {
     async automate(profile, logMessage, checkRunning, jobId = null) {
       logMessage("Randstad Auto Apply initiated. Starting form auto-fill...");
       
-      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const sleep = window.sleep;
 
       const setNativeValue = (element, value) => {
         const valueSetter = Object.getOwnPropertyDescriptor(element, 'value')?.set;

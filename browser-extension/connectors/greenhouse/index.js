@@ -264,7 +264,7 @@ window.Connectors.Greenhouse = {
     async automate(profile, logMessage, checkRunning, jobId = null) {
       logMessage("Greenhouse Auto Apply initiated. Starting form auto-fill...");
       
-      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const sleep = window.sleep;
       
       // Helper function to find a React-Select input in the same question container
       const findReactSelectInput = (el) => {
