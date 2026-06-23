@@ -7,6 +7,76 @@ let ActiveConnector = null;
 debugRemoteLog("Script evaluated on: " + window.location.href);
 
 if (window.location.hostname.includes("indeed.com") || window.location.hostname.includes("linkedin.com") || window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("glassdoor.ca") || window.location.hostname.includes("glassdoor.com") || window.location.hostname.includes("ziprecruiter.com") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com") || window.location.hostname.includes("vanhack.com") || window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1")) {
+
+  window.setConnectorState = (platformName, state) => {
+    if (!isContextValid()) return;
+    const key = `connector_state_${platformName.toLowerCase()}`;
+    chrome.storage.local.set({ [key]: state }, () => {
+      window.postMessage({
+        type: "AI_JOB_APPLY_CONNECTOR_STATE_CHANGE",
+        platformName,
+        state
+      }, "*");
+    });
+  };
+
+  const originalSleep = window.sleep;
+  window.sleep = async (ms) => {
+    const platformName = window.ActiveConnector ? window.ActiveConnector.name : null;
+    if (platformName && ms > 1000 && typeof window.setConnectorState === "function") {
+      window.setConnectorState(platformName, "human wait");
+    }
+    await originalSleep(ms);
+    if (platformName && ms > 1000 && typeof window.setConnectorState === "function") {
+      chrome.storage.local.get([`connector_state_${platformName.toLowerCase()}`], (res) => {
+        if (isContextValid() && res[`connector_state_${platformName.toLowerCase()}`] === "human wait") {
+          window.setConnectorState(platformName, "applying");
+        }
+      });
+    }
+  };
+
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    window.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "AI_JOB_APPLY_GET_CONNECTOR_STATES") {
+        if (!isContextValid()) return;
+        chrome.storage.local.get(null, (result) => {
+          if (!isContextValid()) return;
+          const states = {};
+          for (const [key, val] of Object.entries(result)) {
+            if (key.startsWith("connector_state_")) {
+              const platform = key.replace("connector_state_", "");
+              states[platform] = val;
+            }
+          }
+          window.postMessage({
+            type: "AI_JOB_APPLY_CONNECTOR_STATES_RESPONSE",
+            states
+          }, "*");
+        });
+      }
+    });
+
+    try {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName === "local" && isContextValid()) {
+          for (const [key, change] of Object.entries(changes)) {
+            if (key.startsWith("connector_state_")) {
+              const platform = key.replace("connector_state_", "");
+              window.postMessage({
+                type: "AI_JOB_APPLY_CONNECTOR_STATE_CHANGE",
+                platformName: platform,
+                state: change.newValue
+              }, "*");
+            }
+          }
+        }
+      });
+    } catch (e) {
+      console.warn("[AI Job Apply Extension] Error adding storage change listener:", e);
+    }
+  }
+
   // Clear turbo state helper
   window.addEventListener("AI_JOB_APPLY_CLEAR_TURBO", () => {
     console.log("[AI Job Apply Content Script] Received request to clear all turbo states.");
@@ -20,6 +90,10 @@ if (window.location.hostname.includes("indeed.com") || window.location.hostname.
         "lock_jobbank", "lock_careerbeacon", "lock_indeed", "lock_vanhack", 
         "lock_linkedin", "lock_glassdoor"
       ]);
+      const platforms = ["LinkedIn", "Indeed", "ZipRecruiter", "Glassdoor", "Greenhouse", "Randstad", "Job Bank", "CareerBeacon", "VanHack"];
+      platforms.forEach(p => {
+        chrome.storage.local.set({ [`connector_state_${p.toLowerCase()}`]: "finished" });
+      });
     } catch (e) {
       console.error("[AI Job Apply] Failed to clear turbo states:", e);
     }
@@ -225,6 +299,9 @@ if (window.Connectors) {
           activeJobId = "unknown_job";
         }
         
+        if (typeof window.setConnectorState === "function") {
+          window.setConnectorState(connectorName, "waiting on lock");
+        }
         logMessage(`[Concurrency Manager] Requesting execution lock for ${connectorName} (Job: ${activeJobId})...`);
         
         let acquired = false;
@@ -232,12 +309,18 @@ if (window.Connectors) {
         for (let attempt = 0; attempt < 60; attempt++) {
           if (!checkRunning()) {
             logMessage(`[Concurrency Manager] Stopped/cancelled while waiting for lock.`);
+            if (typeof window.setConnectorState === "function") {
+              window.setConnectorState(connectorName, "finished");
+            }
             return false;
           }
           
           acquired = await window.acquireConnectorLock(connectorName, activeJobId);
           if (acquired) {
             logMessage(`[Concurrency Manager] Lock acquired successfully for ${connectorName}.`);
+            if (typeof window.setConnectorState === "function") {
+              window.setConnectorState(connectorName, "applying");
+            }
             break;
           }
           
@@ -250,6 +333,9 @@ if (window.Connectors) {
         
         if (!acquired) {
           logMessage(`[Concurrency Manager] Timeout waiting for ${connectorName} lock. Skipping.`);
+          if (typeof window.setConnectorState === "function") {
+            window.setConnectorState(connectorName, "finished");
+          }
           return false;
         }
         
@@ -267,6 +353,9 @@ if (window.Connectors) {
           clearInterval(heartbeatInterval);
           logMessage(`[Concurrency Manager] Releasing lock for ${connectorName}.`);
           await window.releaseConnectorLock(connectorName, activeJobId);
+          if (typeof window.setConnectorState === "function") {
+            window.setConnectorState(connectorName, "finished");
+          }
         }
       };
     }
@@ -3658,6 +3747,10 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       turboBtn.innerHTML = "<span>Stop Turbo Mode</span>";
     }
     chrome.storage.local.set({ turbo_mode_active: true });
+    const currentPlatform = getPlatformNameFromHostname(window.location.hostname);
+    if (currentPlatform && typeof window.setConnectorState === "function") {
+      window.setConnectorState(currentPlatform, "applying");
+    }
     
     // Clear and show console
     const consoleContainer = shadowRoot ? shadowRoot.querySelector("#turbo-console-container") : null;
@@ -4284,6 +4377,10 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
     chrome.storage.local.set({ turbo_mode_active: false });
     chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state", "jobbank_search_state", "careerbeacon_turbo_state", "careerbeacon_search_state", "indeed_turbo_state"]);
+    const currentPlatform = getPlatformNameFromHostname(window.location.hostname);
+    if (currentPlatform && typeof window.setConnectorState === "function") {
+      window.setConnectorState(currentPlatform, "finished");
+    }
     updateWidgetUI();
   };
 

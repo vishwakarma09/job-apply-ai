@@ -6,6 +6,11 @@ const retryTabIds = new Set();
 
 // Clear any stale automation states on service worker startup
 chrome.storage.local.remove(["turbo_mode_active", "currently_applying_job_id"]);
+const platforms = ["linkedin", "indeed", "ziprecruiter", "glassdoor", "greenhouse", "randstad", "jobbank", "careerbeacon", "vanhack"];
+platforms.forEach(p => {
+  chrome.storage.local.remove([`connector_state_${p}`]);
+});
+
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log("[AI Job Apply Extension] Service worker installed successfully.");
