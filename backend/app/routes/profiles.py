@@ -204,12 +204,33 @@ def create_job_profile(
             models.JobProfile.user_id == current_user.id
         ).update({models.JobProfile.is_active: False})
         
+    # Copy persona settings from the user's latest/active profile if exists
+    existing_profile = db.query(models.JobProfile).filter(
+        models.JobProfile.user_id == current_user.id
+    ).first()
+        
     db_profile = models.JobProfile(
         user_id=current_user.id,
         title=profile_in.title,
         is_active=profile_in.is_active,
         resume_id=profile_in.resume_id
     )
+    
+    if existing_profile:
+        db_profile.phone = existing_profile.phone
+        db_profile.email = existing_profile.email
+        db_profile.city = existing_profile.city
+        db_profile.nationality = existing_profile.nationality
+        db_profile.visa_sponsorship = existing_profile.visa_sponsorship
+        db_profile.disability_status = existing_profile.disability_status
+        db_profile.veteran_status = existing_profile.veteran_status
+        db_profile.ethnicity = existing_profile.ethnicity
+        db_profile.gender = existing_profile.gender
+        db_profile.languages = existing_profile.languages
+        db_profile.skills = existing_profile.skills
+        db_profile.work_authorization = existing_profile.work_authorization
+        db_profile.answers_json = existing_profile.answers_json
+        
     db.add(db_profile)
     db.commit()
     db.refresh(db_profile)
@@ -284,6 +305,10 @@ def learn_profile_answers(
             existing[q.lower().strip()] = str(a).strip()
             
     profile.answers_json = json.dumps(existing)
+    # Sync answers_json to all other profiles of the same user
+    db.query(models.JobProfile).filter(
+        models.JobProfile.user_id == current_user.id
+    ).update({models.JobProfile.answers_json: profile.answers_json})
     db.commit()
 
     # Update user_knowledgebase table for semantic search RAG
@@ -340,6 +365,19 @@ def update_job_profile(
         
     for field, val in profile_in.dict(exclude_unset=True).items():
         setattr(db_profile, field, val)
+        
+    # Synchronize persona settings (Auto-Fill Persona Settings) across all profiles of the same user
+    persona_fields = {
+        "phone", "email", "city", "nationality", "visa_sponsorship",
+        "disability_status", "veteran_status", "ethnicity", "gender",
+        "languages", "skills", "work_authorization", "answers_json"
+    }
+    updates = profile_in.dict(exclude_unset=True)
+    persona_updates = {field: val for field, val in updates.items() if field in persona_fields}
+    if persona_updates:
+        db.query(models.JobProfile).filter(
+            models.JobProfile.user_id == current_user.id
+        ).update(persona_updates)
         
     db.commit()
     db.refresh(db_profile)
