@@ -39,7 +39,7 @@ def run_tests():
     print("Starting AI Connectors Integration Tests...")
     
     # 1. Register a test user
-    email = f"ai_test_{int(time.time())}@example.com"
+    email = f"ai_test_{int(time.time())}@aijobapply.com"
     reg_data = {
         "name": "AI Test User",
         "email": email,
