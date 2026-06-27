@@ -372,6 +372,7 @@ window.Connectors.LinkedIn = {
       let formIteration = 0;
 
       let previousHtml = "";
+      let previousCleanHtml = "";
 
       let learnedAnswers = {};
       if (profile && profile.answers_json) {
@@ -392,7 +393,15 @@ window.Connectors.LinkedIn = {
 
         // Check if we are on the same page loop to avoid getting stuck in a loop
         const currentHtml = currentModal.innerHTML;
-        if (currentHtml === previousHtml) {
+        const cleanHtml = currentHtml
+          .replace(/class="[^"]*"/g, "")
+          .replace(/id="[^"]*"/g, "")
+          .replace(/disabled/g, "")
+          .replace(/aria-[a-z]+="[^"]*"/g, "")
+          .replace(/<svg[\s\S]*?<\/svg>/g, "")
+          .replace(/\s+/g, " ");
+
+        if (cleanHtml === previousCleanHtml) {
           logMessage("Application stalled due to unanswered questions. Skipping job...");
           const activeJobId = jobId || window.Connectors.LinkedIn.getJobId();
           if (activeJobId) {
@@ -406,13 +415,69 @@ window.Connectors.LinkedIn = {
           return false;
         }
 
+        if (formIteration > 12) {
+          logMessage("Application exceeded max page limit (12). Skipping job...");
+          const activeJobId = jobId || window.Connectors.LinkedIn.getJobId();
+          if (activeJobId) {
+            chrome.storage.local.set({ [`retry_outstanding_questions_${activeJobId}`]: true });
+          }
+          const dismissBtn = currentModal.querySelector("button[aria-label='Dismiss'], button[aria-label='Close'], .artdeco-modal__dismiss");
+          if (dismissBtn) {
+            dismissBtn.click();
+          }
+          return false;
+        }
+
+        if (window.hasActiveCaptcha && window.hasActiveCaptcha()) {
+          logMessage("Active CAPTCHA detected in Easy Apply. Skipping job...");
+          const activeJobId = jobId || window.Connectors.LinkedIn.getJobId();
+          if (activeJobId) {
+            chrome.storage.local.set({ [`retry_outstanding_questions_${activeJobId}`]: true });
+          }
+          const dismissBtn = currentModal.querySelector("button[aria-label='Dismiss'], button[aria-label='Close'], .artdeco-modal__dismiss");
+          if (dismissBtn) {
+            dismissBtn.click();
+          }
+          return false;
+        }
+
         previousHtml = currentHtml;
+        previousCleanHtml = cleanHtml;
         formIteration++;
         logMessage(`Filling page ${formIteration}...`);
 
         // 1. Fill Text Inputs & Textareas
+        const fillTextInput = async (input, valueToFill, labelText) => {
+          if (!input || !valueToFill) return;
+          input.value = valueToFill;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+
+          const isTypeahead = input.id?.includes("typeahead") || input.name?.includes("typeahead") || labelText.toLowerCase().includes("city") || labelText.toLowerCase().includes("location");
+          if (isTypeahead) {
+            logMessage(`Detected location typeahead field: "${labelText}". Waiting for suggestions...`);
+            await sleep(800);
+            
+            const suggestions = Array.from(currentModal.querySelectorAll("div[class*='typeahead-results'], div[class*='suggestions'], [role='listbox'], .basic-typeahead__triggered li, ul li"));
+            const activeSuggestion = suggestions.find(s => s.innerText.toLowerCase().includes(valueToFill.toLowerCase())) || suggestions[0];
+            
+            if (activeSuggestion) {
+              logMessage(`Clicking location suggestion: "${activeSuggestion.innerText.trim()}"`);
+              window.clickElement(activeSuggestion);
+              await sleep(400);
+            } else {
+              logMessage("No suggestions visible in DOM. Dispatching Enter key event to select first option.");
+              input.focus();
+              input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+              await sleep(200);
+              input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+              await sleep(200);
+            }
+          }
+        };
+
         const inputs = currentModal.querySelectorAll("input[type='text'], input[type='tel'], input:not([type]), textarea");
-        inputs.forEach(input => {
+        for (const input of inputs) {
           const labelText = getLabelText(input).toLowerCase().trim();
           let valueToFill = "";
 
@@ -462,11 +527,9 @@ window.Connectors.LinkedIn = {
           }
 
           if (valueToFill && !input.value) {
-            input.value = valueToFill;
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-            input.dispatchEvent(new Event("change", { bubbles: true }));
+            await fillTextInput(input, valueToFill, getLabelText(input));
           }
-        });
+        }
 
         // 2. Select default options in dropdown selects
         const selects = currentModal.querySelectorAll("select");
@@ -652,12 +715,19 @@ window.Connectors.LinkedIn = {
 
               if (solveResponse && solveResponse.action === "fill" && solveResponse.fields) {
                 logMessage("AI Solver successfully resolved fields.");
-                solveResponse.fields.forEach(f => {
+                for (const f of solveResponse.fields) {
                   let el = null;
                   if (f.id) {
-                    // Escape colon in ID selector
-                    const escapedId = f.id.replace(/:/g, '\\:');
-                    el = currentModal.querySelector(`#${escapedId}`) || currentModal.ownerDocument.getElementById(f.id);
+                    try {
+                      // Escape colon in ID selector
+                      const escapedId = f.id.replace(/:/g, '\\:');
+                      el = currentModal.querySelector(`#${escapedId}`);
+                    } catch (selErr) {
+                      // ignore selector syntax errors
+                    }
+                    if (!el) {
+                      el = currentModal.ownerDocument.getElementById(f.id);
+                    }
                   }
                   if (!el && f.name) {
                     if (f.type === "radio") {
@@ -675,7 +745,7 @@ window.Connectors.LinkedIn = {
                           targetRadio.dispatchEvent(new Event("change", { bubbles: true }));
                         }
                       }
-                      return;
+                      continue;
                     }
                     el = currentModal.querySelector(`[name="${f.name}"]`);
                   }
@@ -704,12 +774,10 @@ window.Connectors.LinkedIn = {
                         targetRadio.dispatchEvent(new Event("change", { bubbles: true }));
                       }
                     } else {
-                      el.value = f.value;
-                      el.dispatchEvent(new Event("input", { bubbles: true }));
-                      el.dispatchEvent(new Event("change", { bubbles: true }));
+                      await fillTextInput(el, f.value, getLabelText(el));
                     }
                   }
-                });
+                }
               }
             }
           } catch (solverErr) {
@@ -738,13 +806,18 @@ window.Connectors.LinkedIn = {
         }
 
         // 6. Find and Click Next / Review / Submit Button
-        let nextBtn = currentModal.querySelector("button.artdeco-button--primary");
+        let nextBtn = null;
+        const possiblePrimaryButtons = Array.from(currentModal.querySelectorAll("button.artdeco-button--primary"));
+        nextBtn = possiblePrimaryButtons.find(btn => {
+          const text = btn.innerText.toLowerCase();
+          return !text.includes("update profile") && !text.includes("update your profile");
+        });
         if (!nextBtn) {
           const buttons = Array.from(currentModal.querySelectorAll("button, footer button"));
           nextBtn = buttons.find(btn => {
             const text = btn.innerText.toLowerCase();
             const aria = (btn.getAttribute("aria-label") || "").toLowerCase();
-            const isBack = text.includes("back") || text.includes("previous") || aria.includes("back") || aria.includes("previous");
+            const isBack = text.includes("back") || text.includes("previous") || aria.includes("back") || aria.includes("previous") || text.includes("update profile") || text.includes("update your profile");
             if (isBack) return false;
             return btn.classList.contains("artdeco-button--primary") || 
                    btn.type === "submit" || 
@@ -755,7 +828,11 @@ window.Connectors.LinkedIn = {
           });
         }
         if (!nextBtn) {
-          nextBtn = currentModal.querySelector("button.artdeco-button--primary, button[class*='primary'], footer button");
+          const fallbackButtons = Array.from(currentModal.querySelectorAll("button.artdeco-button--primary, button[class*='primary'], footer button"));
+          nextBtn = fallbackButtons.find(btn => {
+            const text = btn.innerText.toLowerCase();
+            return !text.includes("update profile") && !text.includes("update your profile");
+          });
         }
         if (nextBtn) {
           const btnText = nextBtn.innerText.toLowerCase();

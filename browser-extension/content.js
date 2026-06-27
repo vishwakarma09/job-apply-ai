@@ -516,7 +516,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         active: true,
         profile_id: profile.id,
         profile_json: JSON.stringify(profile),
-        limit: 10,
+        limit: 30,
         applied_count: 0,
         processed_jks: []
       };
@@ -545,6 +545,162 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           }
         }
       });
+    }
+
+    if (window.location.hostname.includes("linkedin.com")) {
+      chrome.storage.local.get(["linkedin_turbo_state"], (res) => {
+        if (!isContextValid()) return;
+        const state = res.linkedin_turbo_state;
+        if (state && state.active) {
+          chrome.runtime.sendMessage({ action: "checkTabRole" }, (role) => {
+            if (!isContextValid()) return;
+            let isMaster = role && role.isMaster;
+            
+            if (!isMaster && (role && !role.turboModeActive)) {
+              chrome.runtime.sendMessage({ action: "setMasterTab" });
+              isMaster = true;
+            }
+            
+            if (isMaster) {
+              const isApplyPage = window.location.pathname.includes("/jobs/view/") && window.location.pathname.includes("/apply");
+              if (isApplyPage) {
+                console.log("[AI Job Apply] Resuming LinkedIn Turbo Apply on dedicated apply page...", state);
+                turboRunning = true;
+                
+                if (!shadowRoot) {
+                  injectShadowDOM();
+                }
+                const consoleContainer = shadowRoot.querySelector("#turbo-console-container");
+                const consoleBox = shadowRoot.querySelector("#turbo-console");
+                const progressSpan = shadowRoot.querySelector("#turbo-progress");
+                const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+                
+                if (consoleContainer) consoleContainer.style.display = "block";
+                if (progressSpan) progressSpan.innerText = `${state.applied_count}/${state.limit}`;
+                if (turboBtn) {
+                  turboBtn.classList.add("danger");
+                  turboBtn.innerHTML = "<span>Stop Turbo Mode</span>";
+                  turboBtn.dataset.profileJson = state.profile_json;
+                }
+                
+                const logMessage = (msg, level = "INFO") => {
+                  console.log(`[AI Job Apply Turbo] [${level}] ${msg}`);
+                  const timestamp = new Date().toLocaleTimeString();
+                  if (consoleBox) {
+                    consoleBox.innerHTML += `[${timestamp}] ${msg}\n`;
+                    consoleBox.scrollTop = consoleBox.scrollHeight;
+                  }
+                  try {
+                    const currentJobId = ActiveConnector.getJobId();
+                    remoteLog(level, msg, currentJobId);
+                  } catch (err) {
+                    console.warn("[AI Job Apply] Error sending remote log:", err);
+                  }
+                };
+
+                logMessage("Resumed LinkedIn Turbo Apply on dedicated apply page.");
+                
+                chrome.storage.local.get(["token", "apiUrl"], async (data) => {
+                  const api = data.apiUrl || API_DEFAULT_URL;
+                  const token = data.token;
+                  if (!token) {
+                    logMessage("No credentials token found. Aborting.");
+                    stopTurboApply();
+                    return;
+                  }
+                  
+                  try {
+                    const profile = JSON.parse(state.profile_json);
+                    const jobId = ActiveConnector.getJobId() || data.currently_applying_job_id;
+                    const jobData = ActiveConnector.scrapeDetails(jobId);
+                    
+                    logMessage("Starting modular Easy Apply form filler...");
+                    const fillSuccess = await ActiveConnector.EasyApply.automate(
+                      profile,
+                      logMessage,
+                      () => turboRunning && isContextValid(),
+                      jobId
+                    );
+                    
+                    if (!isContextValid()) return;
+                    
+                    if (fillSuccess) {
+                      state.applied_count++;
+                      logMessage("Application submitted! Syncing details to database...");
+                      
+                      try {
+                        await syncJobToBackend(jobData, profile.id, "Applied");
+                        logMessage("Database sync complete. Saved on Kanban board.");
+                      } catch (err) {
+                        logMessage(`Database sync failed: ${err.message}`);
+                      }
+                    } else {
+                      logMessage("Application failed, timed out, or was skipped. Saving as 'needs-knowledge-graph' for later retry...");
+                      try {
+                        await syncJobToBackend(jobData, profile.id, "needs-knowledge-graph");
+                        logMessage("Saved to database with status 'needs-knowledge-graph'.");
+                      } catch (err) {
+                        logMessage(`Database sync failed: ${err.message}`);
+                      }
+                    }
+                    
+                    if (jobId) {
+                      if (!state.processed_jks.includes(jobId)) {
+                        state.processed_jks.push(jobId);
+                      }
+                    }
+                    await new Promise(resolve => chrome.storage.local.set({ linkedin_turbo_state: state }, resolve));
+                    
+                    logMessage("Redirecting back to search page in 3 seconds...");
+                    await sleep(3000);
+                    if (state.last_search_url) {
+                      window.location.href = state.last_search_url;
+                    } else {
+                      window.history.back();
+                    }
+                  } catch (err) {
+                    logMessage(`Error during auto-apply execution: ${err.message}`, "ERROR");
+                    stopTurboApply();
+                  }
+                });
+              } else {
+                console.log("[AI Job Apply] Resuming LinkedIn Turbo Mode on search page...", state);
+                
+                if (!shadowRoot) {
+                  injectShadowDOM();
+                }
+                const tabDetails = shadowRoot.querySelector("#tab-btn-details");
+                const tabTurbo = shadowRoot.querySelector("#tab-btn-turbo");
+                const panelDetails = shadowRoot.querySelector("#panel-details");
+                const panelTurbo = shadowRoot.querySelector("#panel-turbo");
+                
+                if (tabDetails) tabDetails.classList.remove("active");
+                if (tabTurbo) tabTurbo.classList.add("active");
+                if (panelDetails) panelDetails.style.display = "none";
+                if (panelTurbo) panelTurbo.style.display = "block";
+                
+                const consoleContainer = shadowRoot.querySelector("#turbo-console-container");
+                const consoleBox = shadowRoot.querySelector("#turbo-console");
+                const progressSpan = shadowRoot.querySelector("#turbo-progress");
+                const turboBtn = shadowRoot.querySelector("#btn-start-turbo");
+                
+                if (consoleContainer) consoleContainer.style.display = "block";
+                if (progressSpan) progressSpan.innerText = `${state.applied_count}/${state.limit}`;
+                if (turboBtn) {
+                  turboBtn.classList.add("danger");
+                  turboBtn.innerHTML = "<span>Stop Turbo Mode</span>";
+                  turboBtn.dataset.profileJson = state.profile_json;
+                }
+                
+                startTurboApply(state);
+              }
+            }
+          });
+          return;
+        }
+        continueScraperSetup();
+      });
+      return;
     }
 
     if (window.location.hostname.includes("indeed.com") && !window.location.hostname.includes("smartapply.indeed.com") && !window.location.hostname.includes("apply.indeed.com") && !window.location.hostname.includes("profile.indeed.com")) {
@@ -998,11 +1154,9 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
 
     function startRegularScraper() {
-      if (window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com") || window.location.hostname.includes("vanhack.com")) {
-        if (!shadowRoot) {
-          activeJobId = ActiveConnector.getJobId() || (window.location.hostname.includes("greenhouse.io") ? "greenhouse-dashboard" : (window.location.hostname.includes("randstad.ca") ? "randstad-dashboard" : (window.location.hostname.includes("careerbeacon.com") ? "careerbeacon-dashboard" : (window.location.hostname.includes("vanhack.com") ? "vanhack-dashboard" : "jobbank-dashboard"))));
-          scrapeAndShowWidget();
-        }
+      if (!shadowRoot) {
+        activeJobId = ActiveConnector.getJobId() || `${ActiveConnector.name.toLowerCase()}-dashboard`;
+        scrapeAndShowWidget();
       }
 
       scraperInterval = setInterval(() => {
@@ -1014,24 +1168,27 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         if (turboRunning) return;
         
         const jobId = ActiveConnector.getJobId();
-        if (jobId && jobId !== activeJobId) {
+        if (jobId !== activeJobId) {
           activeJobId = jobId;
           
           if (scrapeTimeout) clearTimeout(scrapeTimeout);
           
           if (shadowRoot) {
-            shadowRoot.querySelector("#ext-job-title").innerText = "Loading details...";
-            shadowRoot.querySelector("#ext-job-company").innerText = "-";
-            shadowRoot.querySelector("#ext-job-location").innerText = "-";
+            if (jobId) {
+              shadowRoot.querySelector("#ext-job-title").innerText = "Loading details...";
+              shadowRoot.querySelector("#ext-job-company").innerText = "-";
+              shadowRoot.querySelector("#ext-job-location").innerText = "-";
+            } else {
+              shadowRoot.querySelector("#ext-job-title").innerText = "No Job Selected";
+              shadowRoot.querySelector("#ext-job-company").innerText = "Select a job post to begin";
+              shadowRoot.querySelector("#ext-job-location").innerText = "";
+            }
           }
 
           scrapeTimeout = setTimeout(() => {
             if (!isContextValid()) return;
             scrapeAndShowWidget();
           }, 1200);
-        } else if (!jobId && (window.location.hostname.includes("greenhouse.io") || window.location.hostname.includes("randstad.ca") || window.location.hostname.includes("jobbank.gc.ca") || window.location.hostname.includes("careerbeacon.com") || window.location.hostname.includes("vanhack.com")) && !shadowRoot) {
-          activeJobId = window.location.hostname.includes("greenhouse.io") ? "greenhouse-dashboard" : (window.location.hostname.includes("randstad.ca") ? "randstad-dashboard" : (window.location.hostname.includes("careerbeacon.com") ? "careerbeacon-dashboard" : (window.location.hostname.includes("vanhack.com") ? "vanhack-dashboard" : "jobbank-dashboard")));
-          scrapeAndShowWidget();
         }
       }, 1500);
     }
@@ -1447,8 +1604,8 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
               <span>Batch Limit:</span>
               <select id="turbo-limit" style="background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.15); color: white; border-radius: 6px; padding: 2px 6px; outline: none; font-family: inherit;">
-                <option value="10" selected>10 Jobs</option>
-                <option value="20">20 Jobs</option>
+                <option value="10">10 Jobs</option>
+                <option value="30" selected>30 Jobs</option>
                 <option value="50">50 Jobs</option>
                 <option value="100">100 Jobs</option>
               </select>
@@ -1815,13 +1972,22 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
   const updateWidgetUI = () => {
     if (!shadowRoot || !isContextValid()) return;
     
-    if (currentJobData) {
+    const jobId = ActiveConnector.getJobId();
+    const syncLink = shadowRoot.querySelector("#btn-sync-details");
+    
+    if (jobId && currentJobData && currentJobData.title !== "Unknown Position") {
       shadowRoot.querySelector("#ext-job-title").innerText = currentJobData.title;
       shadowRoot.querySelector("#ext-job-company").innerText = currentJobData.company_name;
       shadowRoot.querySelector("#ext-job-location").innerText = currentJobData.location;
-      const platformEl = shadowRoot.querySelector("#ext-job-platform");
-      if (platformEl) platformEl.innerText = ActiveConnector.name;
+      if (syncLink) syncLink.style.display = "inline-block";
+    } else {
+      shadowRoot.querySelector("#ext-job-title").innerText = "No Job Selected";
+      shadowRoot.querySelector("#ext-job-company").innerText = "Select a job post to begin";
+      shadowRoot.querySelector("#ext-job-location").innerText = "";
+      if (syncLink) syncLink.style.display = "none";
     }
+    const platformEl = shadowRoot.querySelector("#ext-job-platform");
+    if (platformEl) platformEl.innerText = ActiveConnector.name;
 
     try {
       // Check backend auth
@@ -1846,6 +2012,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           statusBadge.className = "badge disconnected";
           statusBadge.innerText = "Disconnected";
           saveBtn.disabled = true;
+          saveBtn.style.display = (jobId && currentJobData && currentJobData.title !== "Unknown Position") ? "block" : "none";
           saveBtn.innerHTML = "<span>Please Login in Dashboard</span>";
           autofillBtn.style.display = "none";
           turboBtn.disabled = true;
@@ -1864,8 +2031,23 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           statusBadge.className = "badge connected";
           statusBadge.innerText = "Connected";
           
-          saveBtn.disabled = false;
-          saveBtn.innerHTML = "<span>Save Job & Tailor Letter</span>";
+          if (jobId && currentJobData && currentJobData.title !== "Unknown Position") {
+            saveBtn.disabled = false;
+            saveBtn.style.display = "block";
+            saveBtn.innerHTML = "<span>Save Job & Tailor Letter</span>";
+            
+            // Show Auto Fill button if Easy Apply is available
+            const hasEasyApply = ActiveConnector.getEasyApplyButton && ActiveConnector.getEasyApplyButton();
+            const isGreenhouse = window.location.hostname.includes("greenhouse.io") && !window.location.href.includes("my.greenhouse.io/dashboard");
+            if (hasEasyApply || isGreenhouse) {
+              autofillBtn.style.display = "block";
+            } else {
+              autofillBtn.style.display = "none";
+            }
+          } else {
+            saveBtn.style.display = "none";
+            autofillBtn.style.display = "none";
+          }
           
           const panelTurbo = shadowRoot.querySelector("#panel-turbo");
           if (panelTurbo && panelTurbo.style.display === "block") {
@@ -1884,15 +2066,6 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           autofillBtn.dataset.profileJson = JSON.stringify(profile);
           turboBtn.dataset.profileId = profile.id;
           turboBtn.dataset.profileJson = JSON.stringify(profile);
-
-          // Show Auto Fill button if Easy Apply is available
-          const hasEasyApply = ActiveConnector.getEasyApplyButton && ActiveConnector.getEasyApplyButton();
-          const isGreenhouse = window.location.hostname.includes("greenhouse.io") && !window.location.href.includes("my.greenhouse.io/dashboard");
-          if (hasEasyApply || isGreenhouse) {
-            autofillBtn.style.display = "block";
-          } else {
-            autofillBtn.style.display = "none";
-          }
         })
         .catch(err => {
           if (!isContextValid()) return;
@@ -1900,6 +2073,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           statusBadge.className = "badge disconnected";
           statusBadge.innerText = "Session Expired";
           saveBtn.disabled = true;
+          saveBtn.style.display = (jobId && currentJobData && currentJobData.title !== "Unknown Position") ? "block" : "none";
           saveBtn.innerHTML = "<span>Log in on localhost:5173</span>";
           autofillBtn.style.display = "none";
           turboBtn.disabled = true;
@@ -2016,6 +2190,13 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
 
     const jobKeywords = getKeywords(cleanJob);
     const profileKeywords = getKeywords(cleanProfile);
+
+    const devGroup = ['developer', 'engineer', 'programmer', 'coder', 'dev'];
+    const jobHasDev = jobKeywords.some(jKw => devGroup.some(syn => jKw.includes(syn) || syn.includes(jKw)));
+    const profileHasDev = profileKeywords.some(pKw => devGroup.some(syn => pKw.includes(syn) || syn.includes(pKw)));
+    if (jobHasDev && profileHasDev) {
+      return true;
+    }
 
     if (profileKeywords.length === 0) return true;
 
@@ -3842,18 +4023,23 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       }
     };
 
-    const saveIndeedTurboState = async () => {
-      if (window.location.hostname.includes("indeed.com")) {
+    const saveTurboState = async () => {
+      const isIndeed = window.location.hostname.includes("indeed.com");
+      const isLinkedIn = window.location.hostname.includes("linkedin.com");
+      if (isIndeed || isLinkedIn) {
+        const key = isIndeed ? "indeed_turbo_state" : "linkedin_turbo_state";
+        const currentUrl = window.location.href;
+        const isApplyPage = currentUrl.includes("/jobs/view/") && currentUrl.includes("/apply");
         const stateToSave = {
           active: true,
           profile_id: profile.id,
           profile_json: JSON.stringify(profile),
           limit: limit,
           applied_count: appliedCount,
-          last_search_url: window.location.href,
+          last_search_url: isApplyPage && resumedState ? resumedState.last_search_url : currentUrl,
           processed_jks: processedJks
         };
-        await new Promise(r => chrome.storage.local.set({ indeed_turbo_state: stateToSave }, r));
+        await new Promise(r => chrome.storage.local.set({ [key]: stateToSave }, r));
       }
     };
 
@@ -4295,7 +4481,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           logMessage(`Job title "${cardDetails.title}" does not match active profile title "${profile.title}". Skipping card...`);
           if (indeedJk) {
             processedJks.push(indeedJk);
-            await saveIndeedTurboState();
+            await saveTurboState();
           }
           continue;
         }
@@ -4319,7 +4505,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         logMessage("Could not retrieve Job ID. Skipping...");
         if (indeedJk) {
           processedJks.push(indeedJk);
-          await saveIndeedTurboState();
+          await saveTurboState();
         }
         continue;
       }
@@ -4328,7 +4514,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         logMessage(`Job ID ${jobId} already processed. Skipping...`);
         if (indeedJk && !processedJks.includes(indeedJk)) {
           processedJks.push(indeedJk);
-          await saveIndeedTurboState();
+          await saveTurboState();
         }
         continue;
       }
@@ -4352,7 +4538,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
           logMessage(`Job title "${jobData.title}" does not match active profile title "${profile.title}". Skipping...`);
           if (indeedJk) processedJks.push(indeedJk);
           if (jobId && !processedJks.includes(jobId)) processedJks.push(jobId);
-          await saveIndeedTurboState();
+          await saveTurboState();
           continue;
         }
       }
@@ -4365,7 +4551,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         progressSpan.innerText = `${appliedCount}/${limit}`;
         if (indeedJk) processedJks.push(indeedJk);
         if (jobId && !processedJks.includes(jobId)) processedJks.push(jobId);
-        await saveIndeedTurboState();
+        await saveTurboState();
         try {
           await syncJobToBackend(jobData, profile.id, "Applied");
           logMessage("Database sync complete. Saved on Kanban board.");
@@ -4380,23 +4566,25 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         logMessage("No 'Easy Apply' button available for this listing. Skipping...");
         if (indeedJk) processedJks.push(indeedJk);
         if (jobId && !processedJks.includes(jobId)) processedJks.push(jobId);
-        await saveIndeedTurboState();
+        await saveTurboState();
         continue;
       }
 
       logMessage("Easy Apply option detected! Clicking...");
       
-      // Pre-set Indeed session state before clicking to avoid new-tab race conditions
-      if (ActiveConnector.name === "Indeed") {
-        const activeJobId = ActiveConnector.getJobId();
-        if (activeJobId) {
-          await new Promise(resolve => {
-            chrome.storage.local.set({
-              currently_applying_job_id: activeJobId,
-              [`indeed_apply_status_${activeJobId}`]: "running"
-            }, resolve);
-          });
-        }
+      // Pre-set Indeed/LinkedIn session state before clicking to avoid redirect / new-tab race conditions
+      const activeJobIdForSession = ActiveConnector.getJobId();
+      if (activeJobIdForSession) {
+        await new Promise(resolve => {
+          chrome.storage.local.set({
+            currently_applying_job_id: activeJobIdForSession,
+            [`indeed_apply_status_${activeJobIdForSession}`]: "running",
+            [`retry_apply_active_${activeJobIdForSession}`]: false
+          }, resolve);
+        });
+      }
+      if (ActiveConnector.name === "LinkedIn") {
+        await saveTurboState();
       }
 
       window.clickElement(easyApplyBtn);
@@ -4419,7 +4607,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         logMessage("Application submitted! Syncing details to database...");
         if (indeedJk) processedJks.push(indeedJk);
         if (jobId && !processedJks.includes(jobId)) processedJks.push(jobId);
-        await saveIndeedTurboState();
+        await saveTurboState();
         
         try {
           await syncJobToBackend(jobData, profile.id, "Applied");
@@ -4431,7 +4619,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         logMessage("Application failed, timed out, or was skipped. Saving as 'needs-knowledge-graph' for later retry...");
         if (indeedJk) processedJks.push(indeedJk);
         if (jobId && !processedJks.includes(jobId)) processedJks.push(jobId);
-        await saveIndeedTurboState();
+        await saveTurboState();
         try {
           await syncJobToBackend(jobData, profile.id, "needs-knowledge-graph");
           logMessage("Saved to database with status 'needs-knowledge-graph' for future retry.");
@@ -4458,7 +4646,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       turboBtn.innerHTML = "<span>Launch Turbo Mode</span>";
     }
     chrome.storage.local.set({ turbo_mode_active: false });
-    chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state", "jobbank_search_state", "careerbeacon_turbo_state", "careerbeacon_search_state", "indeed_turbo_state"]);
+    chrome.storage.local.remove(["greenhouse_turbo_state", "ziprecruiter_turbo_state", "randstad_turbo_state", "jobbank_turbo_state", "jobbank_search_state", "careerbeacon_turbo_state", "careerbeacon_search_state", "indeed_turbo_state", "linkedin_turbo_state"]);
     const currentPlatform = getPlatformNameFromHostname(window.location.hostname);
     if (currentPlatform && typeof window.setConnectorState === "function") {
       window.setConnectorState(currentPlatform, "finished");

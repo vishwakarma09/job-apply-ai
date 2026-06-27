@@ -58,8 +58,78 @@ setTimeout(async () => {
     }
 
     // Stream browser console logs and errors to simulation terminal
+    let currentPage = 1;
+    const handleTurboRunFinished = async () => {
+      console.log(`[AutoLaunch] Detected Turbo Mode finished on Page ${currentPage}.`);
+      
+      let appliedCount = 0;
+      try {
+        const loginParams = new URLSearchParams();
+        loginParams.append('username', 'kkumar.sandeep89@gmail.com');
+        loginParams.append('password', 'password');
+        const loginRes = await fetch('http://localhost:8000/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: loginParams
+        });
+        if (loginRes.ok) {
+          const tokenData = await loginRes.json();
+          const jobsRes = await fetch('http://localhost:8000/api/jobs', {
+            headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+          });
+          if (jobsRes.ok) {
+            const jobs = await jobsRes.json();
+            const appliedJobs = jobs.filter(j => j.status === 'Applied' || j.status === 'applied');
+            appliedCount = appliedJobs.length;
+            console.log(`[AutoLaunch] Current database applied job count: ${appliedCount}`);
+          }
+        }
+      } catch (dbErr) {
+        console.log("[AutoLaunch] Error querying database for applied count:", dbErr.message);
+      }
+      
+      if (appliedCount >= 30) {
+        console.log(`[AutoLaunch] Target of 30 applied jobs reached! (Currently ${appliedCount}). Stopping pagination.`);
+        return;
+      }
+      
+      currentPage++;
+      console.log(`[AutoLaunch] Navigating to Page ${currentPage}...`);
+      
+      try {
+        const nextBtn = page.locator('.jobs-search-results-list__pagination button[aria-label="View next page"], .jobs-search-results-list__pagination button.artdeco-pagination__button--next, button.jobs-search-pagination__button--next').first();
+        if (await nextBtn.isVisible()) {
+          console.log("[AutoLaunch] Clicking next page button...");
+          await nextBtn.click();
+        } else {
+          const nextPageNumBtn = page.locator(`.jobs-search-results-list__pagination button[aria-label="Page ${currentPage}"], button.jobs-search-pagination__button[aria-label="Page ${currentPage}"]`).first();
+          if (await nextPageNumBtn.isVisible()) {
+            console.log(`[AutoLaunch] Clicking Page ${currentPage} button...`);
+            await nextPageNumBtn.click();
+          } else {
+            console.log("[AutoLaunch] No next page button found. Stopping.");
+            return;
+          }
+        }
+        
+        console.log("[AutoLaunch] Waiting 8 seconds for page to load and settle...");
+        await page.waitForTimeout(8000);
+        
+        console.log(`[AutoLaunch] Launching Turbo Mode on Page ${currentPage}...`);
+        await autoLaunchTurboMode(page, context);
+      } catch (err) {
+        console.error("[AutoLaunch] Error during pagination:", err.message);
+      }
+    };
+
     page.on('console', msg => {
-      console.log(`[Browser Console] ${msg.type().toUpperCase()}: ${msg.text()}`);
+      const text = msg.text();
+      console.log(`[Browser Console] ${msg.type().toUpperCase()}: ${text}`);
+      if (text.includes("Turbo run finished.")) {
+        handleTurboRunFinished().catch(err => {
+          console.error("[AutoLaunch] Error in handleTurboRunFinished:", err);
+        });
+      }
     });
     page.on('pageerror', err => {
       console.log(`[Browser PageError] ${err.message}`);
@@ -93,8 +163,47 @@ setTimeout(async () => {
       console.log("Dashboard navigation/login skipped or failed:", e.message);
     }
 
-    console.log("Navigating to LinkedIn search page...");
-    await page.goto('https://www.linkedin.com/jobs/search/?keywords=Software%20Developer&location=Toronto%2C%20Ontario%2C%20Canada', { waitUntil: 'domcontentloaded' }).catch(e => {
+    let keywords = "Software Developer";
+    let location = "Toronto, Ontario, Canada";
+
+    try {
+      console.log("Fetching active job profile from backend API to pre-fill search...");
+      const loginParams = new URLSearchParams();
+      loginParams.append('username', 'kkumar.sandeep89@gmail.com');
+      loginParams.append('password', 'password');
+      
+      const loginRes = await fetch('http://localhost:8000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: loginParams
+      });
+      if (loginRes.ok) {
+        const tokenData = await loginRes.json();
+        const profileRes = await fetch('http://localhost:8000/api/profiles/active', {
+          headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          console.log(`Active profile fetched. Title: "${profile.title}", Job Keywords: "${profile.job_title_keywords || ''}", Location: "${profile.job_location || ''}"`);
+          if (profile.job_title_keywords && profile.job_title_keywords.trim()) {
+            keywords = profile.job_title_keywords.trim();
+          } else if (profile.title && profile.title.trim()) {
+            keywords = profile.title.trim();
+          }
+          if (profile.job_location && profile.job_location.trim()) {
+            location = profile.job_location.trim();
+          } else if (profile.city && profile.city.trim()) {
+            location = profile.city.trim();
+          }
+        }
+      }
+    } catch (e) {
+      console.log("Failed to fetch active profile dynamically:", e.message);
+    }
+
+    console.log(`Navigating to LinkedIn search page with keywords="${keywords}" and location="${location}"...`);
+    const searchUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(keywords)}&location=${encodeURIComponent(location)}`;
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded' }).catch(e => {
       console.log("Navigation warning:", e.message);
     });
 
@@ -314,29 +423,29 @@ async function autoLaunchTurboMode(page, context) {
     if (count > 0) {
       console.log("[AutoLaunch] Clicking the first job card to trigger details and widget load...");
       const firstCard = cards.first();
-      await firstCard.click();
+      await firstCard.click({ force: true });
       
       console.log("[AutoLaunch] Waiting 3 seconds for details and widget to load...");
       await page.waitForTimeout(3000);
       
-      console.log("[AutoLaunch] Finding floating AI widget trigger button...");
+       console.log("[AutoLaunch] Finding floating AI widget trigger button...");
       const triggerSelector = '#ai-job-apply-extension-root >> .trigger-btn';
       const triggerBtn = page.locator(triggerSelector);
       await triggerBtn.waitFor({ state: 'attached', timeout: 15000 });
       console.log("[AutoLaunch] Widget trigger found. Clicking it to open drawer...");
-      await triggerBtn.click();
+      await triggerBtn.evaluate(el => el.click());
       
       console.log("[AutoLaunch] Waiting for Turbo Tab inside drawer...");
       const turboTabSelector = '#ai-job-apply-extension-root >> #tab-btn-turbo';
       const turboTab = page.locator(turboTabSelector);
-      await turboTab.waitFor({ state: 'visible', timeout: 5000 });
+      await turboTab.waitFor({ state: 'attached', timeout: 5000 });
       console.log("[AutoLaunch] Clicking Turbo tab...");
-      await turboTab.click();
+      await turboTab.evaluate(el => el.click());
       
       console.log("[AutoLaunch] Waiting for Start Turbo Apply button to be enabled...");
       const startTurboBtnSelector = '#ai-job-apply-extension-root >> #btn-start-turbo';
       const startTurboBtn = page.locator(startTurboBtnSelector);
-      await startTurboBtn.waitFor({ state: 'visible', timeout: 5000 });
+      await startTurboBtn.waitFor({ state: 'attached', timeout: 5000 });
       
       // Wait up to 10 seconds for the button to not be disabled (connected to backend status)
       for (let attempt = 0; attempt < 10; attempt++) {
@@ -350,7 +459,7 @@ async function autoLaunchTurboMode(page, context) {
       }
       
       console.log("[AutoLaunch] Clicking 'Start Turbo Apply' button!");
-      await startTurboBtn.click();
+      await startTurboBtn.evaluate(el => el.click());
       console.log("[AutoLaunch] Turbo mode successfully launched! Monitoring the progress...");
     } else {
       console.log("[AutoLaunch] No job cards found to click.");
