@@ -414,27 +414,59 @@ async function autoLaunchTurboMode(page, context) {
   
   let currentUrl = page.url();
   console.log("[AutoLaunch] Current URL:", currentUrl);
+
+  let keywords = "Forward deployed engineer";
+  let location = "Toronto, ON";
+
+  try {
+    console.log("[AutoLaunch] Fetching active job profile from backend API to pre-fill search...");
+    const token = await getBackendToken();
+    const response = await fetch("http://localhost:8000/api/profiles/active", {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    });
+    if (response.ok) {
+      const profile = await response.json();
+      console.log(`[AutoLaunch] Active profile fetched. Title: "${profile.title}", Job Keywords: "${profile.job_title_keywords || ''}", Location: "${profile.job_location || ''}"`);
+      if (profile.job_title_keywords && profile.job_title_keywords.trim()) {
+        keywords = profile.job_title_keywords.trim();
+      } else if (profile.title && profile.title.trim()) {
+        keywords = profile.title.trim();
+      }
+      if (profile.job_location && profile.job_location.trim()) {
+        location = profile.job_location.trim();
+      } else if (profile.city && profile.city.trim()) {
+        location = profile.city.trim();
+      }
+      if (location.toLowerCase() === "toronto") {
+        location = "Toronto, ON";
+      }
+    }
+  } catch (e) {
+    console.log("[AutoLaunch] Failed to fetch active profile dynamically:", e.message);
+  }
   
   // If we are on Indeed home/landing page (not search results page) or if we are on a search page without a radius limit, navigate directly or perform search
   const isSearchPage = currentUrl.includes("/jobs") || currentUrl.includes("/viewjob") || currentUrl.includes("/rc/clk");
   if (!isSearchPage || (currentUrl.includes("/jobs") && !currentUrl.includes("radius="))) {
-    console.log("[AutoLaunch] Not on search results page or missing radius parameter. Navigating directly to Forward deployed engineer jobs in Toronto with radius=0...");
+    console.log(`[AutoLaunch] Not on search results page or missing radius parameter. Navigating directly to ${keywords} jobs in ${location} with radius=0...`);
     try {
-      await page.goto("https://www.indeed.com/jobs?q=Forward+deployed+engineer&l=Toronto%2C+ON&radius=0", { waitUntil: 'domcontentloaded', timeout: 25000 });
+      await page.goto(`https://www.indeed.com/jobs?q=${encodeURIComponent(keywords)}&l=${encodeURIComponent(location)}&radius=0`, { waitUntil: 'domcontentloaded', timeout: 25000 });
       await page.waitForTimeout(4000);
     } catch (e) {
       console.log("[AutoLaunch] Direct navigation failed, trying home page form fallback:", e.message);
       try {
         const qInput = page.locator('input[name="q"]');
         await qInput.waitFor({ timeout: 5000 });
-        await qInput.fill("Forward deployed engineer");
+        await qInput.fill(keywords);
         
         const lInput = page.locator('input[name="l"]');
         if (await lInput.count() > 0) {
           await lInput.click();
           await page.keyboard.press('Meta+A');
           await page.keyboard.press('Backspace');
-          await lInput.fill("Toronto, ON");
+          await lInput.fill(location);
         }
         
         console.log("[AutoLaunch] Submitting search form...");
