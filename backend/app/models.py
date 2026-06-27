@@ -68,6 +68,13 @@ class JobProfile(Base):
     skills = Column(Text, nullable=True)
     work_authorization = Column(String(100), nullable=True)
     answers_json = Column(Text, nullable=True, default="{}")
+    
+    # Filtering / keyword parameters
+    job_location = Column(String(150), nullable=True)
+    job_title_keywords = Column(Text, nullable=True)
+    job_title_negative_keywords = Column(Text, nullable=True)
+    job_body_keywords = Column(Text, nullable=True)
+    job_body_negative_keywords = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

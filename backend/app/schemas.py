@@ -85,6 +85,13 @@ class JobProfileBase(BaseModel):
     skills: Optional[str] = None
     work_authorization: Optional[str] = None
     answers_json: Optional[str] = "{}"
+    
+    # Filtering / keyword fields
+    job_location: Optional[str] = None
+    job_title_keywords: Optional[str] = None
+    job_title_negative_keywords: Optional[str] = None
+    job_body_keywords: Optional[str] = None
+    job_body_negative_keywords: Optional[str] = None
 
 class JobProfileCreate(JobProfileBase):
     pass
@@ -107,6 +114,12 @@ class JobProfileUpdate(BaseModel):
     skills: Optional[str] = None
     work_authorization: Optional[str] = None
     answers_json: Optional[str] = None
+
+    job_location: Optional[str] = None
+    job_title_keywords: Optional[str] = None
+    job_title_negative_keywords: Optional[str] = None
+    job_body_keywords: Optional[str] = None
+    job_body_negative_keywords: Optional[str] = None
 
 class JobProfileResponse(JobProfileBase):
     id: int

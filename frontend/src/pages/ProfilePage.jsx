@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { profilesAPI, authAPI } from "../services/api";
-import { Upload, Plus, FileText, ToggleLeft, ToggleRight, Trash2, Edit2, AlertCircle, Key, Cpu, Eye, EyeOff } from "lucide-react";
+import { Upload, Plus, FileText, ToggleLeft, ToggleRight, Trash2, Edit2, AlertCircle, Key, Cpu, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react";
 
 const ProfilePage = () => {
   const [resumes, setResumes] = useState([]);
   const [profiles, setProfiles] = useState([]);
+  const [expandedProfileId, setExpandedProfileId] = useState(null);
   const [newTitle, setNewTitle] = useState("");
   const [selectedResumeId, setSelectedResumeId] = useState("");
   const [activeResumeText, setActiveResumeText] = useState("");
@@ -357,39 +358,18 @@ const ProfilePage = () => {
             <h3 className="text-base font-bold text-white">Active Personas</h3>
             
             <div className="flex flex-col gap-4">
-              {profiles.map(p => {
-                const attachedResume = resumes.find(r => r.id === p.resume_id);
-                return (
-                  <div 
-                    key={p.id} 
-                    className={`glass-card p-5 rounded-xl border flex items-center justify-between transition-all ${
-                      p.is_active ? "border-indigo-500/30 bg-indigo-500/[0.02]" : "border-white/5 bg-black/20"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400">
-                        <FileText size={18} />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-white">{p.title}</h4>
-                        <p className="text-[10px] text-[#908fa0] mt-0.5">
-                          Resume: {attachedResume ? attachedResume.filename : "None attached"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <button 
-                        onClick={() => handleToggleActive(p.id)}
-                        className={`transition-colors p-1 ${p.is_active ? "text-indigo-400" : "text-[#908fa0] hover:text-white"}`}
-                        title={p.is_active ? "Active Profile" : "Set Active"}
-                      >
-                        {p.is_active ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+              {profiles.map(p => (
+                <ProfileAccordionItem 
+                  key={p.id}
+                  profile={p}
+                  resumes={resumes}
+                  isExpanded={expandedProfileId === p.id}
+                  onToggle={() => setExpandedProfileId(expandedProfileId === p.id ? null : p.id)}
+                  onToggleActive={handleToggleActive}
+                  onUpdate={fetchData}
+                  onFetchData={fetchData}
+                />
+              ))}
               
               {profiles.length === 0 && (
                 <div className="text-center py-10 text-xs text-[#908fa0]">
@@ -493,7 +473,7 @@ const ProfileMetadataForm = ({ activeProfile, onUpdate }) => {
     <div className="glass-card p-6 rounded-2xl border border-white/10 flex flex-col gap-6">
       <div>
         <h3 className="text-base font-bold text-white flex items-center gap-1.5">
-          <Edit2 size={18} className="text-indigo-400" /> Auto-Fill Persona Settings
+          <Edit2 size={18} className="text-indigo-400" /> Auto-Fill Settings
         </h3>
         <p className="text-[10px] text-[#908fa0] mt-1">Configure automated credentials for Easy Apply forms.</p>
       </div>
@@ -771,6 +751,269 @@ const KnowledgeGraphQuestions = () => {
           )}
         </div>
       </div>
+    </div>
+  );
+};
+
+// Subcomponent to handle individual profile accordion editing & viewing
+const ProfileAccordionItem = ({ 
+  profile, 
+  resumes, 
+  isExpanded, 
+  onToggle, 
+  onToggleActive, 
+  onUpdate, 
+  onFetchData 
+}) => {
+  const [title, setTitle] = useState(profile.title || "");
+  const [resumeId, setResumeId] = useState(profile.resume_id || "");
+  const [jobLocation, setJobLocation] = useState(profile.job_location || "");
+  const [jobTitleKeywords, setJobTitleKeywords] = useState(profile.job_title_keywords || "");
+  const [jobTitleNegKeywords, setJobTitleNegKeywords] = useState(profile.job_title_negative_keywords || "");
+  const [jobBodyKeywords, setJobBodyKeywords] = useState(profile.job_body_keywords || "");
+  const [jobBodyNegKeywords, setJobBodyNegKeywords] = useState(profile.job_body_negative_keywords || "");
+  const [saving, setSaving] = useState(false);
+  const [uploadingResume, setUploadingResume] = useState(false);
+
+  useEffect(() => {
+    setTitle(profile.title || "");
+    setResumeId(profile.resume_id || "");
+    setJobLocation(profile.job_location || "");
+    setJobTitleKeywords(profile.job_title_keywords || "");
+    setJobTitleNegKeywords(profile.job_title_negative_keywords || "");
+    setJobBodyKeywords(profile.job_body_keywords || "");
+    setJobBodyNegKeywords(profile.job_body_negative_keywords || "");
+  }, [profile]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await profilesAPI.update(profile.id, {
+        title,
+        resume_id: resumeId ? parseInt(resumeId) : null,
+        job_location: jobLocation,
+        job_title_keywords: jobTitleKeywords,
+        job_title_negative_keywords: jobTitleNegKeywords,
+        job_body_keywords: jobBodyKeywords,
+        job_body_negative_keywords: jobBodyNegKeywords
+      });
+      alert("Job profile updated successfully!");
+      await onUpdate();
+      onToggle(); // collapse
+    } catch (err) {
+      alert("Failed to update job profile.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = (e) => {
+    e.stopPropagation();
+    // reset form
+    setTitle(profile.title || "");
+    setResumeId(profile.resume_id || "");
+    setJobLocation(profile.job_location || "");
+    setJobTitleKeywords(profile.job_title_keywords || "");
+    setJobTitleNegKeywords(profile.job_title_negative_keywords || "");
+    setJobBodyKeywords(profile.job_body_keywords || "");
+    setJobBodyNegKeywords(profile.job_body_negative_keywords || "");
+    onToggle(); // collapse
+  };
+
+  const handleResumeUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingResume(true);
+    try {
+      const newResume = await profilesAPI.uploadResume(file);
+      await onFetchData(); // refresh resumes in parent
+      setResumeId(newResume.id);
+    } catch (err) {
+      alert("Failed to upload resume. Ensure it is a PDF, TXT, or DOCX file.");
+    } finally {
+      setUploadingResume(false);
+    }
+  };
+
+  const attachedResume = resumes.find(r => r.id === profile.resume_id);
+
+  return (
+    <div 
+      className={`glass-card rounded-xl border transition-all duration-300 overflow-hidden ${
+        profile.is_active ? "border-indigo-500/30 bg-indigo-500/[0.02]" : "border-white/5 bg-black/20"
+      }`}
+    >
+      {/* Header Row */}
+      <div 
+        onClick={onToggle}
+        className="p-5 flex items-center justify-between cursor-pointer hover:bg-white/[0.02] transition-colors"
+      >
+        <div className="flex items-start gap-3 select-none">
+          <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+            <FileText size={18} />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-white">{profile.title}</h4>
+            <p className="text-[10px] text-[#908fa0] mt-0.5">
+              Resume: {attachedResume ? attachedResume.filename : "None attached"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
+          <button 
+            onClick={() => onToggleActive(profile.id)}
+            className={`transition-colors p-1 ${profile.is_active ? "text-indigo-400" : "text-[#908fa0] hover:text-white"}`}
+            title={profile.is_active ? "Active Profile" : "Set Active"}
+          >
+            {profile.is_active ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+          </button>
+          
+          <button 
+            onClick={onToggle}
+            className="text-[#908fa0] hover:text-white transition-colors p-1"
+          >
+            {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded Accordion Body */}
+      {isExpanded && (
+        <div className="px-5 pb-6 pt-2 border-t border-white/5 bg-black/30" onClick={(e) => e.stopPropagation()}>
+          <form onSubmit={handleSave} className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              {/* Persona Name */}
+              <div className="flex flex-col gap-1.5 md:col-span-2">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Persona Name</label>
+                <input 
+                  type="text" 
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Node JS Developer"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                />
+              </div>
+
+              {/* Upload / Select Resume */}
+              <div className="flex flex-col gap-1.5 md:col-span-2">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Resume</label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <select 
+                    value={resumeId}
+                    onChange={(e) => setResumeId(e.target.value)}
+                    className="flex-1 bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                  >
+                    <option value="">Select an uploaded resume</option>
+                    {resumes.map(r => (
+                      <option key={r.id} value={r.id}>{r.filename}</option>
+                    ))}
+                  </select>
+                  
+                  <div className="relative">
+                    <input 
+                      type="file" 
+                      id={`resume-accordion-upload-${profile.id}`}
+                      className="hidden" 
+                      accept=".pdf,.txt,.docx"
+                      onChange={handleResumeUpload}
+                      disabled={uploadingResume}
+                    />
+                    <label 
+                      htmlFor={`resume-accordion-upload-${profile.id}`}
+                      className="inline-flex items-center justify-center bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-400 rounded-xl py-2 px-4 text-xs font-semibold cursor-pointer transition-colors w-full sm:w-auto h-full"
+                    >
+                      {uploadingResume ? "Uploading..." : "Upload New"}
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Job Location */}
+              <div className="flex flex-col gap-1.5 md:col-span-2">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Job Location</label>
+                <input 
+                  type="text" 
+                  value={jobLocation}
+                  onChange={(e) => setJobLocation(e.target.value)}
+                  placeholder="e.g. Remote, Canada, USA"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                />
+              </div>
+
+              {/* Job Title Keywords */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Job Title Keywords</label>
+                <input 
+                  type="text" 
+                  value={jobTitleKeywords}
+                  onChange={(e) => setJobTitleKeywords(e.target.value)}
+                  placeholder="e.g. Node, Backend (comma separated)"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                />
+              </div>
+
+              {/* Job Title Negative Keywords */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Job Title Negative Keywords</label>
+                <input 
+                  type="text" 
+                  value={jobTitleNegKeywords}
+                  onChange={(e) => setJobTitleNegKeywords(e.target.value)}
+                  placeholder="e.g. Junior, Manager"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                />
+              </div>
+
+              {/* Job Body Keywords */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Job Body Keywords</label>
+                <input 
+                  type="text" 
+                  value={jobBodyKeywords}
+                  onChange={(e) => setJobBodyKeywords(e.target.value)}
+                  placeholder="e.g. AWS, React"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                />
+              </div>
+
+              {/* Job Body Negative Keywords */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-[#908fa0] uppercase tracking-wider">Job Body Negative Keywords</label>
+                <input 
+                  type="text" 
+                  value={jobBodyNegKeywords}
+                  onChange={(e) => setJobBodyNegKeywords(e.target.value)}
+                  placeholder="e.g. Crypto, Blockchain"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-indigo-500 text-white"
+                />
+              </div>
+
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 mt-2">
+              <button 
+                type="button" 
+                onClick={handleCancel}
+                className="px-4 py-2 border border-white/10 hover:bg-white/5 rounded-xl font-bold text-xs text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit" 
+                disabled={saving}
+                className="glow-btn px-4 py-2 rounded-xl font-bold text-xs text-white"
+              >
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };
