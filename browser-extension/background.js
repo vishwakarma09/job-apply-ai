@@ -68,11 +68,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
   }
 
+  if (request.action === "getActiveSubtabCount") {
+    sendResponse({ success: true, count: retryTabIds.size });
+    return true;
+  }
+
   if (request.action === "checkIndeedTabs") {
     chrome.tabs.query({}, (tabs) => {
       const indeedTabs = tabs.filter(t => {
         const url = t.url || t.pendingUrl || "";
-        return url.includes("smartapply.indeed.com") || url.includes("profile.indeed.com");
+        return url.includes("smartapply.indeed.com") || url.includes("apply.indeed.com") || url.includes("profile.indeed.com");
       });
       sendResponse({ success: true, tabCount: indeedTabs.length });
     });

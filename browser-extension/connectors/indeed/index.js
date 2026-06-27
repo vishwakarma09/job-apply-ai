@@ -242,7 +242,7 @@ window.Connectors.Indeed = {
   EasyApply: {
     async automate(profile, logMessage, checkRunning, jobId = null) {
       // CASE 1: Running in the original job search tab (monitors the new tab's progress)
-      if (!window.location.hostname.includes("smartapply.indeed.com")) {
+      if (!window.location.hostname.includes("smartapply.indeed.com") && !window.location.hostname.includes("apply.indeed.com")) {
         const activeJobId = jobId || window.Connectors.Indeed.getJobId();
         console.log("[AI Job Apply Master] automate started. activeJobId:", activeJobId);
         if (!activeJobId) {

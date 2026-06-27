@@ -348,6 +348,67 @@ if (window.Connectors) {
         
         try {
           const result = await originalAutomate.call(this, profile, logMessage, checkRunning, jobId);
+          
+          // Check if there are active subtabs open
+          let subtabCount = await new Promise(resolve => {
+            chrome.runtime.sendMessage({ action: "getActiveSubtabCount" }, res => {
+              resolve(res && res.success ? res.count : 0);
+            });
+          });
+          
+          if (subtabCount > 0) {
+            logMessage(`[Concurrency Manager] Active application subtab detected. Waiting for it to complete...`);
+            let finalResult = result;
+            
+            // Poll for up to 75 seconds for the subtab to close and/or set status
+            for (let i = 0; i < 75; i++) {
+              if (!checkRunning()) break;
+              
+              // Check subtab count
+              subtabCount = await new Promise(resolve => {
+                chrome.runtime.sendMessage({ action: "getActiveSubtabCount" }, res => {
+                  resolve(res && res.success ? res.count : 0);
+                });
+              });
+              
+              // Check status from storage
+              const statusData = await new Promise(resolve => {
+                chrome.storage.local.get([
+                  `retry_apply_status_${activeJobId}`,
+                  `indeed_apply_status_${activeJobId}`
+                ], resolve);
+              });
+              
+              const retryStatus = statusData[`retry_apply_status_${activeJobId}`];
+              const indeedStatus = statusData[`indeed_apply_status_${activeJobId}`];
+              
+              if (retryStatus === "success" || indeedStatus === "success") {
+                logMessage(`[Concurrency Manager] Subtab application succeeded.`);
+                finalResult = true;
+                break;
+              } else if (retryStatus === "failed" || indeedStatus === "failed") {
+                logMessage(`[Concurrency Manager] Subtab application failed.`);
+                finalResult = false;
+                break;
+              }
+              
+              if (subtabCount === 0) {
+                logMessage(`[Concurrency Manager] Subtab closed.`);
+                break;
+              }
+              
+              await new Promise(r => setTimeout(r, 1000));
+            }
+            
+            // Clean up status keys
+            chrome.storage.local.remove([
+              `retry_apply_status_${activeJobId}`,
+              `indeed_apply_status_${activeJobId}`
+            ]);
+            
+            return finalResult;
+          }
+          
           return result;
         } finally {
           clearInterval(heartbeatInterval);
@@ -486,7 +547,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       });
     }
 
-    if (window.location.hostname.includes("indeed.com") && !window.location.hostname.includes("smartapply.indeed.com") && !window.location.hostname.includes("profile.indeed.com")) {
+    if (window.location.hostname.includes("indeed.com") && !window.location.hostname.includes("smartapply.indeed.com") && !window.location.hostname.includes("apply.indeed.com") && !window.location.hostname.includes("profile.indeed.com")) {
       chrome.storage.local.get(["indeed_turbo_state"], (res) => {
         if (!isContextValid()) return;
         const state = res.indeed_turbo_state;
@@ -539,9 +600,10 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
                 chrome.storage.local.get([`retry_apply_active_${activeJobId}`], (resRetry) => {
                   if (!isContextValid()) return;
                   const isRetry = resRetry[`retry_apply_active_${activeJobId}`];
+                  const isRetrySub = role && role.isRetrySub;
                   const isAutomated = (role && role.turboModeActive) || isRetry;
                   const isApplyStart = window.location.href.includes("jk=") || window.location.href.includes("applystart");
-                  if (isAutomated && !isMaster && !turboRunning && !isApplyStart) {
+                  if (isAutomated && !isMaster && !isRetrySub && !turboRunning && !isApplyStart) {
                     console.log("[AI Job Apply] Sub-tab redirected away from apply flow. Closing tab.");
                     chrome.storage.local.set({
                       [`indeed_apply_status_${activeJobId}`]: "failed",
@@ -697,7 +759,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     }
 
     // Check if we are running in Indeed's Smart Apply flow tab or Profile Resume page
-    const isSmartApply = window.location.hostname.includes("smartapply.indeed.com");
+    const isSmartApply = window.location.hostname.includes("smartapply.indeed.com") || window.location.hostname.includes("apply.indeed.com");
     const isProfileResume = window.location.hostname.includes("profile.indeed.com") && window.location.pathname.includes("/resume");
     
     if (isSmartApply || isProfileResume) {
@@ -1577,7 +1639,7 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
     console.log("[AI Job Apply] runRetryAutoApply starting for", activeJobId);
     await sleep(2500);
 
-    const isSmartApply = window.location.hostname.includes("smartapply.indeed.com");
+    const isSmartApply = window.location.hostname.includes("smartapply.indeed.com") || window.location.hostname.includes("apply.indeed.com");
     if (isSmartApply) {
       return;
     }
@@ -4228,6 +4290,16 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
       logMessage(`--- Job Item ${i + 1}/${jobCards.length} ---`);
       
       const cardDetails = ActiveConnector.scrapeCardDetails(card);
+      if (profile && profile.title && cardDetails && cardDetails.title && cardDetails.title !== "Unknown Position") {
+        if (!doesJobTitleMatchProfile(cardDetails.title, profile.title)) {
+          logMessage(`Job title "${cardDetails.title}" does not match active profile title "${profile.title}". Skipping card...`);
+          if (indeedJk) {
+            processedJks.push(indeedJk);
+            await saveIndeedTurboState();
+          }
+          continue;
+        }
+      }
       
       try {
         card.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -4272,6 +4344,16 @@ if (window.location.hostname.includes("linkedin.com") || window.location.hostnam
         }
         if (jobData.location === "Unknown Location" && cardDetails.location !== "Unknown Location") {
           jobData.location = cardDetails.location;
+        }
+      }
+
+      if (profile && profile.title && jobData.title && jobData.title !== "Unknown Position") {
+        if (!doesJobTitleMatchProfile(jobData.title, profile.title)) {
+          logMessage(`Job title "${jobData.title}" does not match active profile title "${profile.title}". Skipping...`);
+          if (indeedJk) processedJks.push(indeedJk);
+          if (jobId && !processedJks.includes(jobId)) processedJks.push(jobId);
+          await saveIndeedTurboState();
+          continue;
         }
       }
       
